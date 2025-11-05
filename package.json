@@ -1,13 +1,25 @@
 {
-  "name": "handwritingMathApp",
-  "version": "0.0.1",
+  "name": "handwriting-math-app",
+  "version": "0.1.0",
   "private": true,
+  "description": "A React Native tablet app for handwriting math solutions with step-by-step validation and intelligent tutoring",
+  "author": "Superbuilders <rafal.szulejko@superbuilders.school>",
+  "license": "UNLICENSED",
   "scripts": {
     "android": "react-native run-android",
     "ios": "react-native run-ios",
-    "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest"
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest tests/unit",
+    "test:component": "jest tests/component",
+    "clean": "rm -rf node_modules ios/Pods ios/build android/build android/app/build",
+    "clean:ios": "cd ios && xcodebuild clean && cd ..",
+    "postinstall": "cd ios && pod install && cd .."
   },
   "dependencies": {
     "react": "19.1.1",
