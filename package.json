@@ -25,10 +25,13 @@
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native/new-app-screen": "0.82.1",
     "@shopify/react-native-skia": "^2.3.10",
+    "axios": "^1.13.2",
+    "crypto-js": "^4.2.0",
     "react": "19.1.1",
     "react-native": "0.82.1",
     "react-native-gesture-handler": "^2.29.1",
-    "react-native-safe-area-context": "^5.5.2"
+    "react-native-safe-area-context": "^5.5.2",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
@@ -41,6 +44,7 @@
     "@react-native/eslint-config": "0.82.1",
     "@react-native/metro-config": "0.82.1",
     "@react-native/typescript-config": "0.82.1",
+    "@types/crypto-js": "^4.2.2",
     "@types/jest": "^29.5.13",
     "@types/react": "^19.1.1",
     "@types/react-test-renderer": "^19.1.0",
