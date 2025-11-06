@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { RecognitionStatus } from '../types/MyScript';
 import { formatRecognitionResult, getConfidenceLevel } from '../utils/recognitionUtils';
-import { useCanvasStore, selectRecognitionState } from '../stores/canvasStore';
+import { useCanvasStore } from '../stores/canvasStore';
 
 /**
  * Props for RecognitionIndicator
@@ -38,7 +38,10 @@ export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
   showConfidence = true,
   showErrors = true,
 }) => {
-  const { result, status, isRecognizing } = useCanvasStore(selectRecognitionState);
+  // Use individual selectors to avoid creating new objects on every render
+  const result = useCanvasStore(state => state.recognitionResult);
+  const status = useCanvasStore(state => state.recognitionStatus);
+  const isRecognizing = useCanvasStore(state => state.isRecognizing);
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
 
   // Fade in/out animation when status changes

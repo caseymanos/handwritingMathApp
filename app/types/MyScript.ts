@@ -53,7 +53,35 @@ export type MyScriptMimeType =
   | 'image/svg+xml';
 
 /**
- * Recognition request body
+ * Math solver configuration
+ */
+export interface MathSolverConfiguration {
+  /** Enable math solving */
+  enable?: boolean;
+  /** Number of decimal places for fractional parts */
+  'fractional-part-digits'?: number;
+  /** Decimal separator character */
+  'decimal-separator'?: '.' | ',';
+  /** Rounding mode */
+  'rounding-mode'?: 'half up' | 'truncate' | 'ceiling' | 'floor';
+  /** Angle unit for trigonometric functions */
+  'angle-unit'?: 'deg' | 'rad';
+}
+
+/**
+ * Math recognition configuration
+ */
+export interface MathConfiguration {
+  /** MIME types to receive in response for Math content */
+  mimeTypes?: MyScriptMimeType[];
+  /** Math solver configuration */
+  solver?: MathSolverConfiguration;
+  /** Grammar for math recognition */
+  grammar?: string;
+}
+
+/**
+ * Recognition request body for /batch endpoint (uses strokeGroups)
  */
 export interface MyScriptRecognitionRequest {
   /** Content type to recognize */
@@ -62,6 +90,8 @@ export interface MyScriptRecognitionRequest {
   configuration: {
     /** Language code (e.g., 'en_US') */
     lang?: string;
+    /** Math-specific configuration (required for Math content type) */
+    math?: MathConfiguration;
     /** Export formats to receive */
     export?: {
       'image-resolution'?: number;
@@ -73,6 +103,10 @@ export interface MyScriptRecognitionRequest {
           chars?: boolean;
         };
       };
+      mathml?: {
+        /** MathML flavor: 'standard' or 'ms-office' */
+        flavor?: 'standard' | 'ms-office';
+      };
     };
   };
   /** Stroke groups to recognize */
@@ -82,8 +116,50 @@ export interface MyScriptRecognitionRequest {
     /** Theme for rendering (e.g., 'ink-on-paper') */
     theme?: string;
   };
-  /** MIME types to receive in response */
+  /** MIME types to receive in response (deprecated: use configuration.math.mimeTypes for Math content) */
   mimeTypes?: MyScriptMimeType[];
+}
+
+/**
+ * Recognize request body for /recognize endpoint (uses flat strokes array)
+ */
+export interface MyScriptRecognizeRequest {
+  /** Content type to recognize */
+  contentType: MyScriptContentType;
+  /** Configuration for recognition */
+  configuration: {
+    /** Language code (e.g., 'en_US') */
+    lang?: string;
+    /** Math-specific configuration (required for Math content type) */
+    math?: MathConfiguration;
+    /** Export formats to receive */
+    export?: {
+      'image-resolution'?: number;
+      jiix?: {
+        strokes?: boolean;
+        'bounding-box'?: boolean;
+        text?: {
+          words?: boolean;
+          chars?: boolean;
+        };
+      };
+      mathml?: {
+        /** MathML flavor: 'standard' or 'ms-office' */
+        flavor?: 'standard' | 'ms-office';
+      };
+    };
+  };
+  /** Flat array of strokes (NOT strokeGroups - this is the key difference from /batch) */
+  strokes: MyScriptStroke[];
+  /** Optional horizontal scale factor */
+  scaleX?: number;
+  /** Optional vertical scale factor */
+  scaleY?: number;
+  /** Optional context for better recognition */
+  context?: {
+    /** Theme for rendering (e.g., 'ink-on-paper') */
+    theme?: string;
+  };
 }
 
 /**
@@ -127,6 +203,11 @@ export interface MyScriptRecognitionResponse {
 }
 
 /**
+ * MyScript API endpoint types
+ */
+export type MyScriptEndpoint = 'batch' | 'recognize';
+
+/**
  * MyScript API configuration
  */
 export interface MyScriptConfig {
@@ -138,6 +219,8 @@ export interface MyScriptConfig {
   hmacKey?: string;
   /** Timeout for API requests (ms) */
   timeout?: number;
+  /** API endpoint to use (batch = legacy engines, recognize = latest engines) */
+  endpoint?: MyScriptEndpoint;
 }
 
 /**

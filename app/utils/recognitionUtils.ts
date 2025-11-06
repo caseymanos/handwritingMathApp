@@ -8,7 +8,7 @@
 import { Stroke } from '../types/Canvas';
 import { RecognitionResult, RecognitionStatus } from '../types/MyScript';
 import { MyScriptClient } from './myScriptClient';
-import { createRecognitionRequest, validateStrokes } from './myScriptUtils';
+import { createRecognitionRequest, createRecognizeRequest, validateStrokes } from './myScriptUtils';
 
 /**
  * Configuration for recognition behavior
@@ -123,8 +123,11 @@ export class RecognitionManager {
       );
     }
 
-    // Create recognition request
-    const request = createRecognitionRequest(limitedStrokes, 'Math', 'PEN');
+    // Create recognition request based on configured endpoint
+    const endpoint = this.client.getConfig().endpoint;
+    const request = endpoint === 'recognize'
+      ? createRecognizeRequest(limitedStrokes, 'Math', 'PEN')
+      : createRecognitionRequest(limitedStrokes, 'Math', 'PEN');
 
     // Perform recognition
     const result = await this.client.recognize(request, this.config.useHMAC);

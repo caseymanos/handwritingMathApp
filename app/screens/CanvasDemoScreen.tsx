@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HandwritingCanvas } from '../components/HandwritingCanvas';
 import { FloatingToolbar } from '../components/FloatingToolbar';
@@ -22,7 +22,8 @@ import {
   ToolbarPosition,
 } from '../types/Canvas';
 import { useCanvasStore } from '../stores/canvasStore';
-import { RecognitionStatus } from '../types/MyScript';
+import { RecognitionStatus, MyScriptEndpoint } from '../types/MyScript';
+import { getMyScriptClient } from '../utils/myScriptClient';
 
 const WELCOME_MODAL_KEY = '@handwriting_math:welcome_shown';
 
@@ -41,9 +42,21 @@ export const CanvasDemoScreen: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [strokeCount, setStrokeCount] = useState(0);
   const [showManualInput, setShowManualInput] = useState(false);
+  const [currentEndpoint, setCurrentEndpoint] = useState<MyScriptEndpoint>('batch');
 
   // Access canvas store for recognition state
-  const { recognitionResult, recognitionStatus, setRecognitionResult } = useCanvasStore();
+  const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes } = useCanvasStore();
+
+  // Initialize endpoint from client on mount
+  useEffect(() => {
+    try {
+      const client = getMyScriptClient();
+      const config = client.getConfig();
+      setCurrentEndpoint(config.endpoint);
+    } catch (error) {
+      console.error('Error getting MyScript client config:', error);
+    }
+  }, []);
 
   // Check if welcome modal should be shown (first launch only)
   useEffect(() => {
@@ -125,6 +138,24 @@ export const CanvasDemoScreen: React.FC = () => {
     setShowManualInput(false);
   };
 
+  const handleToggleEndpoint = () => {
+    try {
+      const client = getMyScriptClient();
+      const newEndpoint: MyScriptEndpoint = currentEndpoint === 'batch' ? 'recognize' : 'batch';
+      client.setEndpoint(newEndpoint);
+      setCurrentEndpoint(newEndpoint);
+      console.log(`Switched to ${newEndpoint} endpoint`);
+    } catch (error) {
+      console.error('Error toggling endpoint:', error);
+    }
+  };
+
+  const handleClearCanvas = () => {
+    clearStrokes();
+    setStrokeCount(0);
+    console.log('Canvas cleared');
+  };
+
   // Auto-show manual input fallback on recognition error
   useEffect(() => {
     if (recognitionStatus === RecognitionStatus.ERROR) {
@@ -157,6 +188,31 @@ export const CanvasDemoScreen: React.FC = () => {
         showConfidence={true}
         showErrors={true}
       />
+
+      {/* Control buttons container (below recognition banner) */}
+      <View style={styles.controlsContainer}>
+        {/* Clear Canvas button */}
+        <TouchableOpacity
+          style={styles.clearButton}
+          onPress={handleClearCanvas}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.clearButtonText}>Clear Canvas</Text>
+        </TouchableOpacity>
+
+        {/* Endpoint toggle button */}
+        <TouchableOpacity
+          style={styles.endpointToggle}
+          onPress={handleToggleEndpoint}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.endpointLabel}>Endpoint:</Text>
+          <Text style={styles.endpointValue}>{currentEndpoint}</Text>
+          <Text style={styles.endpointHint}>
+            {currentEndpoint === 'batch' ? '(legacy)' : '(latest)'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Floating toolbar (draggable) */}
       {isToolbarVisible && (
@@ -204,5 +260,57 @@ const styles = StyleSheet.create({
   },
   canvasWrapper: {
     flex: 1,
+  },
+  controlsContainer: {
+    position: 'absolute',
+    top: 80, // Below the recognition banner
+    right: 20,
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  clearButton: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  endpointToggle: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  endpointLabel: {
+    fontSize: 12,
+    color: '#666666',
+    fontWeight: '500',
+  },
+  endpointValue: {
+    fontSize: 14,
+    color: '#000000',
+    fontWeight: '700',
+  },
+  endpointHint: {
+    fontSize: 11,
+    color: '#999999',
+    fontStyle: 'italic',
   },
 });

@@ -8,7 +8,12 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import CryptoJS from 'crypto-js';
 import {
+  MYSCRIPT_APPLICATION_KEY,
+  MYSCRIPT_HMAC_KEY,
+} from '@env';
+import {
   MyScriptConfig,
+  MyScriptEndpoint,
   MyScriptRecognitionRequest,
   MyScriptRecognitionResponse,
   RecognitionResult,
@@ -20,7 +25,18 @@ import {
   extractLatex,
   extractMathML,
   extractText,
+  createRecognitionRequest,
+  createRecognizeRequest,
+  getPointerType,
 } from './myScriptUtils';
+
+// Debug: Check if env vars are loading
+console.log('Environment variable check:', {
+  MYSCRIPT_APPLICATION_KEY_type: typeof MYSCRIPT_APPLICATION_KEY,
+  MYSCRIPT_APPLICATION_KEY_value: MYSCRIPT_APPLICATION_KEY,
+  MYSCRIPT_HMAC_KEY_type: typeof MYSCRIPT_HMAC_KEY,
+  MYSCRIPT_HMAC_KEY_value: MYSCRIPT_HMAC_KEY,
+});
 
 /**
  * Default MyScript API configuration
@@ -28,6 +44,7 @@ import {
 const DEFAULT_CONFIG: Partial<MyScriptConfig> = {
   apiUrl: 'https://cloud.myscript.com/api/v4.0/iink',
   timeout: 10000, // 10 seconds
+  endpoint: 'batch', // Default to batch endpoint (legacy engines, well-documented)
 };
 
 /**
@@ -55,7 +72,8 @@ export class MyScriptClient {
       timeout: this.config.timeout,
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        // Accept header must include JIIX for Math recognition
+        'Accept': 'application/vnd.myscript.jiix,application/x-latex,application/mathml+xml,application/json',
       },
     });
   }
@@ -86,23 +104,34 @@ export class MyScriptClient {
   /**
    * Perform handwriting recognition on strokes
    *
-   * @param request - Recognition request with strokes
+   * @param request - Recognition request with strokes (format depends on endpoint)
    * @param useHMAC - Whether to use HMAC authentication (can be disabled for testing)
    * @returns Recognition result with LaTeX, MathML, etc.
    */
   async recognize(
-    request: MyScriptRecognitionRequest,
+    request: MyScriptRecognitionRequest | MyScriptRecognizeRequest,
     useHMAC: boolean = true
   ): Promise<RecognitionResult> {
     const startTime = Date.now();
-    const strokeIds = request.strokeGroups.flatMap(group =>
-      group.strokes.map(stroke => stroke.id)
-    );
+
+    // Extract stroke IDs based on request format
+    const strokeIds = 'strokeGroups' in request
+      ? request.strokeGroups.flatMap(group => group.strokes.map(stroke => stroke.id))
+      : request.strokes.map(stroke => stroke.id);
 
     try {
       // Serialize request body
       const body = JSON.stringify(request);
-      const path = '/batch'; // or '/recognize' for newer API
+      // Use configured endpoint (base URL already includes /iink)
+      const endpoint = this.config.endpoint || 'batch';
+      const path = `/${endpoint}`;
+
+      // Debug: Log request details
+      console.log('=== MyScript API Request Debug ===');
+      console.log('Endpoint:', endpoint, `(${this.config.apiUrl}${path})`);
+      console.log('Request body:', JSON.stringify(request, null, 2));
+      console.log('Configuration.math:', JSON.stringify(request.configuration?.math, null, 2));
+      console.log('==================================');
 
       // Prepare headers
       const headers: Record<string, string> = {
@@ -121,6 +150,20 @@ export class MyScriptClient {
         body,
         { headers }
       );
+
+      // Debug: Log API response structure
+      console.log('=== MyScript API Response Debug ===');
+      console.log('Response status:', response.status);
+      console.log('Response statusText:', response.statusText);
+      console.log('Response data type:', typeof response.data);
+      console.log('Response data keys:', Object.keys(response.data || {}));
+      console.log('Full response.data:', JSON.stringify(response.data, null, 2));
+      console.log('response.data.exports exists?', !!response.data?.exports);
+      if (response.data?.exports) {
+        console.log('response.data.exports length:', response.data.exports.length);
+        console.log('MIME types in exports:', response.data.exports.map((e: any) => e['mime-type']));
+      }
+      console.log('=================================');
 
       // Parse response
       const latex = extractLatex(response.data);
@@ -281,15 +324,31 @@ export class MyScriptClient {
   }
 
   /**
+   * Set the API endpoint to use
+   *
+   * @param endpoint - 'batch' (legacy engines) or 'recognize' (latest engines)
+   */
+  setEndpoint(endpoint: MyScriptEndpoint): void {
+    this.config.endpoint = endpoint;
+    console.log(`MyScript endpoint changed to: ${endpoint}`);
+  }
+
+  /**
    * Get current configuration (without exposing keys)
    *
    * @returns Safe config info
    */
-  getConfig(): { apiUrl: string; hasApplicationKey: boolean; hasHmacKey: boolean } {
+  getConfig(): {
+    apiUrl: string;
+    hasApplicationKey: boolean;
+    hasHmacKey: boolean;
+    endpoint: MyScriptEndpoint;
+  } {
     return {
       apiUrl: this.config.apiUrl,
       hasApplicationKey: !!this.config.applicationKey,
       hasHmacKey: !!this.config.hmacKey,
+      endpoint: this.config.endpoint || 'batch',
     };
   }
 }
@@ -300,10 +359,15 @@ export class MyScriptClient {
  * @returns Configured MyScript client
  */
 export function createMyScriptClientFromEnv(): MyScriptClient {
-  // Note: In React Native, use react-native-config or similar to load env vars
-  // For now, these will need to be set in .env and loaded via a config module
-  const applicationKey = process.env.MYSCRIPT_APPLICATION_KEY || '';
-  const hmacKey = process.env.MYSCRIPT_HMAC_KEY;
+  const applicationKey = MYSCRIPT_APPLICATION_KEY || '';
+  const hmacKey = MYSCRIPT_HMAC_KEY;
+
+  console.log('MyScript Config:', {
+    hasApplicationKey: !!applicationKey,
+    applicationKeyLength: applicationKey?.length,
+    applicationKeyPreview: applicationKey?.substring(0, 8) + '...',
+    hasHmacKey: !!hmacKey,
+  });
 
   if (!applicationKey) {
     throw new Error(

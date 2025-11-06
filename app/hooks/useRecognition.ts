@@ -49,7 +49,6 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
   // Get Zustand store actions
   const canvasStore = useCanvasStore();
   const {
-    strokes,
     setIsRecognizing,
     setRecognitionResult,
     setRecognitionStatus,
@@ -63,7 +62,9 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
   useEffect(() => {
     if (enabled && !managerRef.current) {
       try {
+        console.log('Initializing MyScript client...');
         const client = getMyScriptClient();
+        console.log('Client initialized successfully');
         managerRef.current = new RecognitionManager(client, {
           pauseDuration,
           minConfidence,
@@ -71,6 +72,7 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
         });
       } catch (error) {
         console.error('Failed to initialize recognition manager:', error);
+        console.error('Error details:', error?.message);
       }
     }
   }, [enabled, pauseDuration, minConfidence, useHMAC]);
@@ -84,6 +86,25 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
         return;
       }
 
+      // Filter out invalid strokes (must have at least 2 points)
+      const validStrokes = strokesToRecognize.filter(
+        stroke => stroke.points && stroke.points.length >= 2
+      );
+
+      // Check if we have any valid strokes
+      if (validStrokes.length === 0) {
+        console.log('No valid strokes to recognize (all strokes have < 2 points)');
+        return;
+      }
+
+      // Log filtered strokes
+      if (validStrokes.length !== strokesToRecognize.length) {
+        console.log(
+          `Filtered out ${strokesToRecognize.length - validStrokes.length} invalid strokes ` +
+          `(${validStrokes.length} valid strokes remaining)`
+        );
+      }
+
       // Check if we can recognize (debouncing)
       if (!managerRef.current.canRecognize()) {
         console.log('Recognition debounced - too soon after last call');
@@ -95,8 +116,8 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
       setRecognitionStatus(RecognitionStatus.PROCESSING);
 
       try {
-        console.log(`Recognizing ${strokesToRecognize.length} strokes...`);
-        const result = await managerRef.current.recognizeStrokes(strokesToRecognize);
+        console.log(`Recognizing ${validStrokes.length} strokes...`);
+        const result = await managerRef.current.recognizeStrokes(validStrokes);
 
         // Update store with result
         setRecognitionResult(result);
@@ -134,7 +155,7 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
    * Will trigger recognition after the configured pause duration
    */
   const startPauseDetection = useCallback(() => {
-    if (!managerRef.current || !enabled || strokes.length === 0) {
+    if (!managerRef.current || !enabled) {
       return;
     }
 
@@ -144,13 +165,16 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
     // Start new pause detection
     const timer = managerRef.current.startPauseDetection(() => {
       console.log('Pause detected - triggering recognition');
-      recognizeStrokes(strokes);
+      // Get fresh strokes from store at recognition time, not from closure
+      const currentStrokes = useCanvasStore.getState().strokes;
+      if (currentStrokes.length > 0) {
+        recognizeStrokes(currentStrokes);
+      }
     });
 
     setPauseDetectionTimer(timer);
   }, [
     enabled,
-    strokes,
     recognizeStrokes,
     clearPauseDetectionTimer,
     setPauseDetectionTimer,
@@ -170,11 +194,13 @@ export function useRecognition(config: UseRecognitionConfig = {}) {
    * Manually trigger recognition immediately
    */
   const triggerRecognition = useCallback(() => {
-    if (strokes.length > 0) {
+    // Get fresh strokes from store at recognition time, not from closure
+    const currentStrokes = useCanvasStore.getState().strokes;
+    if (currentStrokes.length > 0) {
       cancelPauseDetection();
-      recognizeStrokes(strokes);
+      recognizeStrokes(currentStrokes);
     }
-  }, [strokes, recognizeStrokes, cancelPauseDetection]);
+  }, [recognizeStrokes, cancelPauseDetection]);
 
   /**
    * Clear recognition result
