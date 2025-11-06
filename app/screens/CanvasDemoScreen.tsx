@@ -12,6 +12,8 @@ import { HandwritingCanvas } from '../components/HandwritingCanvas';
 import { FloatingToolbar } from '../components/FloatingToolbar';
 import { ToggleButton } from '../components/ToggleButton';
 import { WelcomeModal } from '../components/WelcomeModal';
+import { RecognitionIndicator } from '../components/RecognitionIndicator';
+import { ManualInputFallback } from '../components/ManualInputFallback';
 import {
   DrawingTool,
   CANVAS_COLORS,
@@ -19,6 +21,8 @@ import {
   Stroke,
   ToolbarPosition,
 } from '../types/Canvas';
+import { useCanvasStore } from '../stores/canvasStore';
+import { RecognitionStatus } from '../types/MyScript';
 
 const WELCOME_MODAL_KEY = '@handwriting_math:welcome_shown';
 
@@ -36,6 +40,10 @@ export const CanvasDemoScreen: React.FC = () => {
   );
   const [showWelcome, setShowWelcome] = useState(false);
   const [strokeCount, setStrokeCount] = useState(0);
+  const [showManualInput, setShowManualInput] = useState(false);
+
+  // Access canvas store for recognition state
+  const { recognitionResult, recognitionStatus, setRecognitionResult } = useCanvasStore();
 
   // Check if welcome modal should be shown (first launch only)
   useEffect(() => {
@@ -99,6 +107,35 @@ export const CanvasDemoScreen: React.FC = () => {
     setToolbarPosition(position);
   };
 
+  const handleRecognitionComplete = (latex?: string) => {
+    if (latex) {
+      console.log('Recognition completed:', latex);
+    }
+  };
+
+  const handleManualInput = (input: string) => {
+    console.log('Manual input:', input);
+    // Create a manual recognition result
+    setRecognitionResult({
+      status: RecognitionStatus.SUCCESS,
+      latex: input,
+      timestamp: Date.now(),
+      strokeIds: [],
+    });
+    setShowManualInput(false);
+  };
+
+  // Auto-show manual input fallback on recognition error
+  useEffect(() => {
+    if (recognitionStatus === RecognitionStatus.ERROR) {
+      // Wait 2 seconds before showing manual input option
+      const timer = setTimeout(() => {
+        setShowManualInput(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [recognitionStatus]);
+
   return (
     <View style={styles.container}>
       {/* Full-screen canvas */}
@@ -107,10 +144,19 @@ export const CanvasDemoScreen: React.FC = () => {
           selectedColor={selectedColor}
           selectedTool={selectedTool}
           showLineGuides={showLineGuides}
+          enableRecognition={true}
           onStrokeComplete={handleStrokeComplete}
           onStrokesChange={handleStrokesChange}
+          onRecognitionComplete={handleRecognitionComplete}
         />
       </View>
+
+      {/* Recognition indicator (shows status and results) */}
+      <RecognitionIndicator
+        top={20}
+        showConfidence={true}
+        showErrors={true}
+      />
 
       {/* Floating toolbar (draggable) */}
       {isToolbarVisible && (
@@ -138,6 +184,14 @@ export const CanvasDemoScreen: React.FC = () => {
       <WelcomeModal
         visible={showWelcome}
         onDismiss={handleWelcomeDismiss}
+      />
+
+      {/* Manual input fallback (shows on recognition error) */}
+      <ManualInputFallback
+        visible={showManualInput}
+        onSubmit={handleManualInput}
+        onCancel={() => setShowManualInput(false)}
+        initialValue={recognitionResult?.text || ''}
       />
     </View>
   );

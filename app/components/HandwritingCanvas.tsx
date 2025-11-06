@@ -5,7 +5,7 @@
  * Uses Skia for GPU-accelerated rendering (120 FPS capable).
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import {
   Canvas,
@@ -29,6 +29,8 @@ import {
 } from '../types/Canvas';
 import { useStylus } from '../hooks/useStylus';
 import { calculateStrokeWidth, getEraserWidth } from '../utils/pressureUtils';
+import { useCanvasStore } from '../stores/canvasStore';
+import { useRecognition } from '../hooks/useRecognition';
 
 // Line guide configuration
 const LINE_GUIDE_SPACING = 60; // pixels between horizontal guides
@@ -38,8 +40,10 @@ interface HandwritingCanvasProps {
   selectedColor?: CanvasColor;
   selectedTool?: DrawingTool;
   showLineGuides?: boolean;
+  enableRecognition?: boolean;
   onStrokeComplete?: (stroke: Stroke) => void;
   onStrokesChange?: (strokes: Stroke[]) => void;
+  onRecognitionComplete?: (latex?: string) => void;
 }
 
 /**
@@ -49,11 +53,20 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
   selectedColor = CANVAS_COLORS.BLACK,
   selectedTool = DrawingTool.PEN,
   showLineGuides = true,
+  enableRecognition = true,
   onStrokeComplete,
   onStrokesChange,
+  onRecognitionComplete,
 }) => {
-  const [strokes, setStrokes] = useState<Stroke[]>([]);
-  const [currentStroke, setCurrentStroke] = useState<Stroke | null>(null);
+  // Use Zustand store for state management
+  const canvasStore = useCanvasStore();
+  const { strokes, currentStroke, addStroke, setCurrentStroke } = canvasStore;
+
+  // Initialize recognition hook
+  const { startPauseDetection, cancelPauseDetection } = useRecognition({
+    enabled: enableRecognition,
+    onRecognitionComplete,
+  });
 
   const { processTouchEvent } = useStylus();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -74,6 +87,9 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
    */
   const handlePanStart = useCallback(
     (event: any) => {
+      // Cancel any pending recognition when starting a new stroke
+      cancelPauseDetection();
+
       const { deviceType, pressure } = processTouchEvent(event);
 
       const point: StrokePoint = {
@@ -98,7 +114,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
 
       setCurrentStroke(newStroke);
     },
-    [processTouchEvent, selectedColor, selectedTool],
+    [processTouchEvent, selectedColor, selectedTool, cancelPauseDetection, setCurrentStroke],
   );
 
   /**
@@ -138,15 +154,28 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
   const handlePanEnd = useCallback(() => {
     if (!currentStroke) return;
 
-    // Add completed stroke to strokes array
-    const newStrokes = [...strokes, currentStroke];
-    setStrokes(newStrokes);
+    // Add completed stroke to store
+    addStroke(currentStroke);
     setCurrentStroke(null);
 
     // Notify parent components
     onStrokeComplete?.(currentStroke);
-    onStrokesChange?.(newStrokes);
-  }, [currentStroke, strokes, onStrokeComplete, onStrokesChange]);
+    onStrokesChange?.([...strokes, currentStroke]);
+
+    // Start pause detection for recognition
+    if (enableRecognition) {
+      startPauseDetection();
+    }
+  }, [
+    currentStroke,
+    strokes,
+    addStroke,
+    setCurrentStroke,
+    onStrokeComplete,
+    onStrokesChange,
+    enableRecognition,
+    startPauseDetection,
+  ]);
 
   /**
    * Pan gesture configuration

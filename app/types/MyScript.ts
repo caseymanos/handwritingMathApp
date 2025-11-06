@@ -67,7 +67,7 @@ export interface MyScriptRecognitionRequest {
       'image-resolution'?: number;
       jiix?: {
         strokes?: boolean;
-        bounding-box?: boolean;
+        'bounding-box'?: boolean;
         text?: {
           words?: boolean;
           chars?: boolean;
