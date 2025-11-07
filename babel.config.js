@@ -7,7 +7,7 @@ module.exports = {
         moduleName: '@env',
         path: '.env',
         safe: false,
-        allowUndefined: false,
+        allowUndefined: true,  // Allow undefined values - code has fallbacks
         blocklist: null,
         allowlist: null,
         verbose: false,
