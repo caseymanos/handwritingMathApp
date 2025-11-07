@@ -45,10 +45,6 @@ interface ValidationStoreState {
   lastValidationTime: number | null;
   validationCount: number;
 
-  // Hint state
-  currentHint: string | null;
-  hintLevel: 'concept' | 'direction' | 'micro' | null;
-
   // Actions: Validation operations
   validateStep: (request: ValidationRequest) => Promise<ValidationResult>;
   validateStepDebounced: (request: ValidationRequest, debounceMs?: number) => Promise<ValidationResult>;
@@ -65,11 +61,6 @@ interface ValidationStoreState {
   setCurrentStepNumber: (stepNumber: number) => void;
   addPreviousStep: (step: string) => void;
   clearPreviousSteps: () => void;
-
-  // Actions: Hint management
-  requestHint: () => void;
-  getNextHintLevel: () => 'concept' | 'direction' | 'micro';
-  clearHint: () => void;
 
   // Actions: API status
   setApiAvailable: (available: boolean) => void;
@@ -100,8 +91,6 @@ const initialState = {
   },
   lastValidationTime: null,
   validationCount: 0,
-  currentHint: null,
-  hintLevel: null,
 };
 
 /**
@@ -246,8 +235,6 @@ export const useValidationStore = create<ValidationStoreState>((set, get) => ({
       currentValidation: null,
       error: null,
       status: ValidationStatus.IDLE,
-      currentHint: null,
-      hintLevel: null,
     });
   },
 
@@ -263,44 +250,6 @@ export const useValidationStore = create<ValidationStoreState>((set, get) => ({
 
   clearPreviousSteps: () => {
     set({ previousSteps: [] });
-  },
-
-  // Hint management actions
-  requestHint: () => {
-    const state = get();
-    const nextLevel = state.getNextHintLevel();
-
-    console.log('[ValidationStore] Requesting hint at level:', nextLevel);
-
-    set({
-      hintLevel: nextLevel,
-      // The actual hint text will be set in CanvasDemoScreen
-      // by calling getNextStepHint() from mathValidation utils
-    });
-  },
-
-  getNextHintLevel: (): 'concept' | 'direction' | 'micro' => {
-    const state = get();
-
-    // Progressive escalation: concept → direction → micro
-    if (state.hintLevel === null) {
-      return 'concept';
-    }
-    if (state.hintLevel === 'concept') {
-      return 'direction';
-    }
-    if (state.hintLevel === 'direction') {
-      return 'micro';
-    }
-    // Stay at micro level (most specific)
-    return 'micro';
-  },
-
-  clearHint: () => {
-    set({
-      currentHint: null,
-      hintLevel: null,
-    });
   },
 
   // API status actions

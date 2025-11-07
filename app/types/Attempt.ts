@@ -7,6 +7,7 @@
 
 import { Stroke } from './Canvas';
 import { ValidationResult } from './Validation';
+import { HintHistory } from './Hint';
 
 /**
  * A single step in a solution attempt
@@ -68,8 +69,11 @@ export interface Attempt {
   /** Did the student solve it correctly? */
   solved: boolean;
 
-  /** Number of hints requested */
+  /** Number of hints requested (legacy count) */
   hintsRequested: number;
+
+  /** Detailed hint history with escalation tracking */
+  hintHistory: HintHistory;
 
   /** Total time spent (milliseconds) */
   totalTime: number;
