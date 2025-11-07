@@ -28,10 +28,13 @@ import {
 import { Problem, ProblemDifficulty } from '../types/Problem';
 import { useCanvasStore } from '../stores/canvasStore';
 import { useValidationStore } from '../stores/validationStore';
+import { useHintStore } from '../stores/hintStore';
+import { useProgressStore } from '../stores/progressStore';
 import { RecognitionStatus, MyScriptEndpoint } from '../types/MyScript';
 import { getMyScriptClient } from '../utils/myScriptClient';
 import { getRandomProblem, getNextProblem } from '../utils/problemData';
-import { getNextStepHint } from '../utils/mathValidation';
+import { ValidationErrorType } from '../types/Validation';
+import { Step } from '../types/Attempt';
 
 const WELCOME_MODAL_KEY = '@handwriting_math:welcome_shown';
 
@@ -54,7 +57,7 @@ export const CanvasDemoScreen: React.FC = () => {
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
 
   // Access canvas store for recognition state
-  const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes } = useCanvasStore();
+  const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes, strokes } = useCanvasStore();
 
   // Access validation store
   const {
@@ -63,13 +66,30 @@ export const CanvasDemoScreen: React.FC = () => {
     setCurrentStepNumber,
     addPreviousStep,
     currentStepNumber,
-    requestHint,
-    getNextHintLevel,
+    currentValidation,
   } = useValidationStore();
 
-  // Track hint state locally for display
-  const currentHint = useValidationStore(state => state.currentHint);
-  const hintLevel = useValidationStore(state => state.hintLevel);
+  // Access hint store
+  const {
+    requestHint,
+    clearHint,
+    incrementIncorrectAttempts,
+    resetIncorrectAttempts,
+    shouldShowAutoHint,
+    startInactivityTimer,
+    stopInactivityTimer,
+  } = useHintStore();
+
+  // Access progress store
+  const {
+    startAttempt,
+    endAttempt,
+    addStepToAttempt,
+    currentAttempt,
+  } = useProgressStore();
+
+  // Track step start time for attempt tracking
+  const [stepStartTime, setStepStartTime] = useState<number | null>(null);
 
   // Initialize with a random easy problem
   useEffect(() => {
@@ -83,8 +103,17 @@ export const CanvasDemoScreen: React.FC = () => {
     if (currentProblem) {
       setValidationProblem(currentProblem.id);
       console.log('[CanvasDemoScreen] Validation store initialized for problem:', currentProblem.id);
+
+      // Start new attempt for this problem
+      startAttempt(currentProblem.id);
+      console.log('[CanvasDemoScreen] Started new attempt for problem:', currentProblem.id);
+
+      // Clear any active inactivity timer and hints when problem changes
+      stopInactivityTimer();
+      clearHint();
+      resetIncorrectAttempts();
     }
-  }, [currentProblem, setValidationProblem]);
+  }, [currentProblem, setValidationProblem, startAttempt, stopInactivityTimer, clearHint, resetIncorrectAttempts]);
 
   // Initialize endpoint from client on mount
   useEffect(() => {
@@ -162,6 +191,8 @@ export const CanvasDemoScreen: React.FC = () => {
   const handleRecognitionComplete = (latex?: string) => {
     if (latex) {
       console.log('Recognition completed:', latex);
+      // Mark the start time for this step (when recognition completes)
+      setStepStartTime(Date.now());
     }
   };
 
@@ -174,6 +205,9 @@ export const CanvasDemoScreen: React.FC = () => {
     try {
       console.log('[CanvasDemoScreen] Validating step:', currentStepNumber, recognitionResult.latex);
 
+      // Clear any active inactivity timer when validating
+      stopInactivityTimer();
+
       const validationResult = await validateStep({
         problemId: currentProblem.id,
         studentStep: recognitionResult.latex,
@@ -184,11 +218,59 @@ export const CanvasDemoScreen: React.FC = () => {
 
       console.log('[CanvasDemoScreen] Validation result:', validationResult);
 
-      // If correct, add to previous steps and increment step number
+      // Create Step object and add to attempt (regardless of validation result)
+      if (stepStartTime) {
+        const stepData: Step = {
+          id: `step_${currentProblem.id}_${currentStepNumber}_${Date.now()}`,
+          strokeData: [...strokes], // Deep copy strokes
+          recognizedText: recognitionResult.text || recognitionResult.latex,
+          latex: recognitionResult.latex,
+          color: selectedColor,
+          validation: validationResult,
+          startTime: stepStartTime,
+          endTime: Date.now(),
+          manualInput: false,
+          recognitionConfidence: recognitionResult.confidence,
+        };
+
+        addStepToAttempt(stepData);
+        console.log('[CanvasDemoScreen] Step added to attempt:', stepData.id);
+      }
+
+      // If correct and useful, reset error tracking and move to next step
       if (validationResult.isCorrect && validationResult.isUseful) {
         addPreviousStep(recognitionResult.latex);
         setCurrentStepNumber(currentStepNumber + 1);
+        resetIncorrectAttempts();
         console.log('[CanvasDemoScreen] Step validated successfully, moving to step:', currentStepNumber + 1);
+
+        // Check if this is the final answer
+        const isFinalAnswer = validationResult.isFinalAnswer;
+        if (isFinalAnswer) {
+          console.log('[CanvasDemoScreen] Final answer reached, ending attempt as solved');
+          endAttempt(true);
+        }
+      } else if (!validationResult.isCorrect) {
+        // Track incorrect attempt in hint store
+        const errorType = validationResult.errorType as ValidationErrorType || ValidationErrorType.ARITHMETIC;
+        incrementIncorrectAttempts(errorType);
+
+        // Check if we should start inactivity timer (auto-hint after 2+ errors + 10s delay)
+        if (shouldShowAutoHint()) {
+          console.log('[CanvasDemoScreen] Starting inactivity timer for auto-hint');
+          // Start timer with callback to show hint
+          startInactivityTimer(() => {
+            console.log('[CanvasDemoScreen] Inactivity timer expired, requesting hint');
+            requestHint(
+              errorType,
+              currentProblem.category,
+              currentStepNumber,
+              recognitionResult.latex
+            );
+          });
+        }
+
+        console.log('[CanvasDemoScreen] Incorrect step, errorType:', errorType);
       }
     } catch (error) {
       console.error('[CanvasDemoScreen] Validation failed:', error);
@@ -227,6 +309,12 @@ export const CanvasDemoScreen: React.FC = () => {
 
   const handleNextProblem = () => {
     if (currentProblem) {
+      // End current attempt as incomplete before loading next problem
+      if (currentAttempt) {
+        endAttempt(false);
+        console.log('[CanvasDemoScreen] Ended incomplete attempt, moving to next problem');
+      }
+
       const nextProblem = getNextProblem(currentProblem.id);
       if (nextProblem) {
         setCurrentProblem(nextProblem);
@@ -243,26 +331,25 @@ export const CanvasDemoScreen: React.FC = () => {
   };
 
   const handleRequestHint = () => {
-    if (!currentProblem) {
-      console.warn('[CanvasDemoScreen] Cannot request hint: no current problem');
+    if (!currentProblem || !currentValidation) {
+      console.warn('[CanvasDemoScreen] Cannot request hint: no current problem or validation');
       return;
     }
 
-    console.log('[CanvasDemoScreen] Requesting hint');
+    console.log('[CanvasDemoScreen] Manually requesting hint');
 
-    // Get next hint level from store
-    const nextLevel = getNextHintLevel();
+    // Use the error type from the latest validation result
+    const errorType = currentValidation.errorType as ValidationErrorType || ValidationErrorType.ARITHMETIC;
 
-    // Get the actual hint text
-    const hint = getNextStepHint(currentProblem.id, currentStepNumber, nextLevel);
+    // Request hint from hint store
+    requestHint(
+      errorType,
+      currentProblem.category,
+      currentStepNumber,
+      recognitionResult?.latex
+    );
 
-    // Update store with new hint and level
-    useValidationStore.setState({
-      currentHint: hint,
-      hintLevel: nextLevel,
-    });
-
-    console.log('[CanvasDemoScreen] Hint requested:', nextLevel, hint);
+    console.log('[CanvasDemoScreen] Hint requested for error type:', errorType);
   };
 
   // Auto-show manual input fallback on recognition error
@@ -275,6 +362,16 @@ export const CanvasDemoScreen: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [recognitionStatus]);
+
+  // Cleanup: end incomplete attempt on component unmount
+  useEffect(() => {
+    return () => {
+      if (currentAttempt) {
+        console.log('[CanvasDemoScreen] Component unmounting, ending incomplete attempt');
+        endAttempt(false);
+      }
+    };
+  }, [currentAttempt, endAttempt]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
