@@ -1,24 +1,27 @@
 /**
  * Handwriting Math App
- * Main application entry point
+ * Main application entry point with React Navigation
  */
 
 import React from 'react';
 import { StatusBar, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { CanvasDemoScreen } from './app/screens/CanvasDemoScreen';
+import { NavigationContainer } from '@react-navigation/native';
+import { AppNavigator } from './app/navigation/AppNavigator';
 
 function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
     <SafeAreaProvider>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor="#FFFFFF"
-        translucent={false}
-      />
-      <CanvasDemoScreen />
+      <NavigationContainer>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor="#FFFFFF"
+          translucent={false}
+        />
+        <AppNavigator />
+      </NavigationContainer>
     </SafeAreaProvider>
   );
 }
