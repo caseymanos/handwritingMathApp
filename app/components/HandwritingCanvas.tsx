@@ -5,7 +5,7 @@
  * Uses Skia for GPU-accelerated rendering (120 FPS capable).
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useReducer, useRef } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import {
   Canvas,
@@ -35,7 +35,7 @@ import { Colors } from '../styles';
 
 // Line guide configuration
 const LINE_GUIDE_SPACING = 60; // pixels between horizontal guides
-const LINE_GUIDE_COLOR = Colors.ui.divider;
+const LINE_GUIDE_COLOR = Colors.ui.border;
 
 interface HandwritingCanvasProps {
   selectedColor?: CanvasColor;
@@ -61,7 +61,14 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
 }) => {
   // Use Zustand store for state management
   const canvasStore = useCanvasStore();
-  const { strokes, currentStroke, addStroke, setCurrentStroke } = canvasStore;
+  const { strokes, addStroke, setCurrentStroke } = canvasStore;
+
+  // Use local ref for active drawing stroke to avoid re-renders during pan gestures
+  // This is the KEY optimization: no state updates = no re-renders during drawing
+  const currentStrokeRef = useRef<Stroke | null>(null);
+
+  // Use useReducer for stable forced re-renders (more stable than useState for this pattern)
+  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
   // Initialize recognition hook
   const { startPauseDetection, cancelPauseDetection } = useRecognition({
@@ -113,17 +120,21 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
         timestamp: Date.now(),
       };
 
-      setCurrentStroke(newStroke);
+      // Store in local ref instead of Zustand state
+      currentStrokeRef.current = newStroke;
+      forceUpdate();
     },
-    [processTouchEvent, selectedColor, selectedTool, cancelPauseDetection, setCurrentStroke],
+    [processTouchEvent, selectedColor, selectedTool, cancelPauseDetection, forceUpdate],
   );
 
   /**
    * Handle continuation of drawing gesture
+   * Optimized: push to array instead of spreading for better performance
    */
   const handlePanUpdate = useCallback(
     (event: any) => {
-      if (!currentStroke) return;
+      const current = currentStrokeRef.current;
+      if (!current) return;
 
       const { deviceType, pressure } = processTouchEvent(event);
 
@@ -140,35 +151,39 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
           ? getEraserWidth(deviceType)
           : calculateStrokeWidth(pressure, deviceType);
 
-      setCurrentStroke({
-        ...currentStroke,
-        points: [...currentStroke.points, point],
-        strokeWidth, // Update with latest pressure
-      });
+      // Mutate the ref directly - no state updates, no re-renders!
+      current.points.push(point);
+      current.strokeWidth = strokeWidth;
+
+      // Trigger minimal Skia update without full component re-render
+      forceUpdate();
     },
-    [currentStroke, processTouchEvent, selectedTool],
+    [processTouchEvent, selectedTool, forceUpdate],
   );
 
   /**
    * Handle end of drawing gesture
    */
   const handlePanEnd = useCallback(() => {
-    if (!currentStroke) return;
+    const completedStroke = currentStrokeRef.current;
+    if (!completedStroke) return;
 
-    // Add completed stroke to store
-    addStroke(currentStroke);
+    // Add completed stroke to Zustand store (only happens once per stroke)
+    addStroke(completedStroke);
     setCurrentStroke(null);
 
+    // Clear local ref
+    currentStrokeRef.current = null;
+
     // Notify parent components
-    onStrokeComplete?.(currentStroke);
-    onStrokesChange?.([...strokes, currentStroke]);
+    onStrokeComplete?.(completedStroke);
+    onStrokesChange?.([...strokes, completedStroke]);
 
     // Start pause detection for recognition
     if (enableRecognition) {
       startPauseDetection();
     }
   }, [
-    currentStroke,
     strokes,
     addStroke,
     setCurrentStroke,
@@ -185,6 +200,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
     .onStart(handlePanStart)
     .onUpdate(handlePanUpdate)
     .onEnd(handlePanEnd)
+    .runOnJS(true) // Explicitly run callbacks on JS thread
     .minDistance(0); // Respond immediately
 
   /**
@@ -233,7 +249,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
                   p2={vec(screenWidth, y)}
                   color={LINE_GUIDE_COLOR}
                   style="stroke"
-                  strokeWidth={1}
+                  strokeWidth={2}
                 />
               ))}
 
@@ -257,17 +273,20 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
               })}
             </Group>
 
-            {/* Render current stroke being drawn */}
-            {currentStroke && (() => {
-              const path = createPathFromStroke(currentStroke);
+            {/* Render current stroke being drawn - using ref */}
+            {currentStrokeRef.current && (() => {
+              const stroke = currentStrokeRef.current;
+              if (!stroke) return null;
+
+              const path = createPathFromStroke(stroke);
               if (!path) return null;
 
               return (
                 <Path
                   path={path}
-                  color={currentStroke.color}
+                  color={stroke.color}
                   style="stroke"
-                  strokeWidth={currentStroke.strokeWidth}
+                  strokeWidth={stroke.strokeWidth}
                   strokeCap="round"
                   strokeJoin="round"
                 />

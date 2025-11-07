@@ -9,6 +9,12 @@ import { Stroke, DrawingTool, CANVAS_COLORS, InputDevice } from '../types/Canvas
 import { RecognitionResult, RecognitionStatus } from '../types/MyScript';
 
 /**
+ * Performance limits to prevent unbounded memory growth
+ */
+const MAX_STROKES = 500; // Maximum strokes to keep in memory
+const MAX_RECOGNITION_HISTORY = 50; // Maximum recognition results to keep
+
+/**
  * Canvas store state interface
  */
 interface CanvasStoreState {
@@ -86,10 +92,20 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
 
   // Stroke actions
   addStroke: (stroke: Stroke) =>
-    set(state => ({
-      strokes: [...state.strokes, stroke],
-      lastStrokeTime: Date.now(),
-    })),
+    set(state => {
+      // Add new stroke and enforce limit to prevent unbounded growth
+      const newStrokes = [...state.strokes, stroke];
+      
+      // If we exceed the limit, remove oldest strokes (FIFO)
+      const strokes = newStrokes.length > MAX_STROKES
+        ? newStrokes.slice(newStrokes.length - MAX_STROKES)
+        : newStrokes;
+      
+      return {
+        strokes,
+        lastStrokeTime: Date.now(),
+      };
+    }),
 
   setCurrentStroke: (stroke: Stroke | null) =>
     set({ currentStroke: stroke }),
@@ -128,9 +144,17 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
     set({ isRecognizing }),
 
   addToRecognitionHistory: (result: RecognitionResult) =>
-    set(state => ({
-      recognitionHistory: [...state.recognitionHistory, result],
-    })),
+    set(state => {
+      // Add new result and enforce limit to prevent unbounded growth
+      const newHistory = [...state.recognitionHistory, result];
+      
+      // If we exceed the limit, remove oldest results (FIFO)
+      const recognitionHistory = newHistory.length > MAX_RECOGNITION_HISTORY
+        ? newHistory.slice(newHistory.length - MAX_RECOGNITION_HISTORY)
+        : newHistory;
+      
+      return { recognitionHistory };
+    }),
 
   clearRecognitionHistory: () =>
     set({ recognitionHistory: [] }),

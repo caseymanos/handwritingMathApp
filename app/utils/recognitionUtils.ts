@@ -30,7 +30,7 @@ export interface RecognitionConfig {
  * Default recognition configuration
  */
 export const DEFAULT_RECOGNITION_CONFIG: RecognitionConfig = {
-  pauseDuration: 500, // 500ms pause as per PRD (250-500ms range)
+  pauseDuration: 650, // 650ms pause (performance optimized: 500-750ms range)
   minConfidence: 0.85, // 85% confidence target
   maxStrokesPerRecognition: 50, // Reasonable limit
   debounceDuration: 500, // 500ms debounce for API calls

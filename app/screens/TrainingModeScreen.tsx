@@ -20,6 +20,9 @@ import { ManualInputFallback } from '../components/ManualInputFallback';
 import { ProblemDisplay } from '../components/ProblemDisplay';
 import { ValidationFeedback } from '../components/ValidationFeedback';
 import { AppHeader } from '../components/AppHeader';
+import { StepResultDisplay, StepResult } from '../components/StepResultDisplay';
+import { getLineNumberFromStrokes } from '../utils/lineDetectionUtils';
+import SuccessAnimation from '../components/SuccessAnimation';
 import {
   DrawingTool,
   CANVAS_COLORS,
@@ -57,9 +60,12 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
   const [showManualInput, setShowManualInput] = useState(false);
   const [currentEndpoint, setCurrentEndpoint] = useState<MyScriptEndpoint>('recognize');
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
+  const [autoValidationTimer, setAutoValidationTimer] = useState<NodeJS.Timeout | null>(null);
+  const [stepResults, setStepResults] = useState<StepResult[]>([]); // Track all step results
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
   // Access canvas store for recognition state
-  const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes, strokes } = useCanvasStore();
+  const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes, clearRecognitionHistory, strokes } = useCanvasStore();
 
   // Access validation store
   const {
@@ -176,6 +182,9 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       pointCount: stroke.points.length,
       color: stroke.color,
     });
+
+    // Don't cancel auto-validation timer - let it complete so validation always happens
+    // This ensures users always get feedback on their work
   };
 
   const handleStrokesChange = (strokes: Stroke[]) => {
@@ -199,33 +208,88 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
     setIsToolbarVisible(prev => !prev);
   };
 
+  const handleManualCheck = () => {
+    // Find the most recent unvalidated step
+    const unvalidatedStep = stepResults.find(step => !step.isValidated);
+
+    if (unvalidatedStep) {
+      console.log('[TrainingModeScreen] Manual check triggered for line:', unvalidatedStep.lineNumber);
+      // Cancel auto-validation timer if it exists
+      if (autoValidationTimer) {
+        clearTimeout(autoValidationTimer);
+        setAutoValidationTimer(null);
+      }
+      // Validate immediately
+      handleValidateStep(unvalidatedStep.lineNumber, unvalidatedStep.latex);
+    } else {
+      console.log('[TrainingModeScreen] No unvalidated steps to check');
+    }
+  };
+
   const handleToolbarPositionChange = (position: ToolbarPosition) => {
     setToolbarPosition(position);
   };
 
   const handleRecognitionComplete = (latex?: string) => {
     if (latex) {
-      console.log('Recognition completed:', latex);
+      console.log('[TrainingModeScreen] Recognition completed:', latex);
       // Mark the start time for this step (when recognition completes)
       setStepStartTime(Date.now());
+
+      // Calculate which line the strokes are on
+      const lineNumber = getLineNumberFromStrokes(strokes);
+      console.log('[TrainingModeScreen] Detected line number:', lineNumber, 'for', strokes.length, 'strokes');
+
+      // Default to line 0 if null (strokes above canvas area)
+      const displayLineNumber = lineNumber !== null ? lineNumber : 0;
+
+      // Add unvalidated step result to display
+      const newStepResult: StepResult = {
+        lineNumber: displayLineNumber,
+        latex,
+        isValidated: false,
+      };
+
+      // Replace any existing result for this line, or add new
+      setStepResults(prev => {
+        const filtered = prev.filter(r => r.lineNumber !== displayLineNumber);
+        return [...filtered, newStepResult];
+      });
+
+      // Clear any existing auto-validation timer
+      if (autoValidationTimer) {
+        clearTimeout(autoValidationTimer);
+      }
+
+      // Start instant validation countdown (150ms - just enough to detect end of stroke)
+      const timer = setTimeout(() => {
+        console.log('[TrainingModeScreen] Auto-validation timer expired, validating step');
+        handleValidateStep(displayLineNumber, latex);
+      }, 150);
+
+      setAutoValidationTimer(timer);
     }
   };
 
-  const handleValidateStep = async () => {
-    if (!recognitionResult?.latex || !currentProblem) {
+  const handleValidateStep = async (lineNumber?: number, latex?: string) => {
+    // Use provided values or fall back to recognition result
+    const stepLatex = latex || recognitionResult?.latex;
+    const stepLineNumber = lineNumber !== undefined ? lineNumber : (recognitionResult ? 0 : undefined);
+
+    if (!stepLatex || !currentProblem || stepLineNumber === undefined) {
       console.warn('[TrainingModeScreen] Cannot validate: no recognition result or problem');
       return;
     }
 
     try {
-      console.log('[TrainingModeScreen] Validating step:', currentStepNumber, recognitionResult.latex);
+      console.log('[TrainingModeScreen] Validating step:', currentStepNumber, stepLatex, '(fixed null ref)');
 
       // Clear any active inactivity timer when validating
       stopInactivityTimer();
 
       const validationResult = await validateStep({
         problemId: currentProblem.id,
-        studentStep: recognitionResult.latex,
+        studentStep: stepLatex,
         stepNumber: currentStepNumber,
         previousSteps: [],
         problemStatement: currentProblem.latex,
@@ -233,19 +297,35 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
 
       console.log('[TrainingModeScreen] Validation result:', validationResult);
 
+      // Update step result with validation status
+      setStepResults(prev => {
+        const updated = prev.map(result => {
+          if (result.lineNumber === stepLineNumber && !result.isValidated) {
+            return {
+              ...result,
+              isValidated: true,
+              isCorrect: validationResult.isCorrect,
+              isUseful: validationResult.isUseful,
+            };
+          }
+          return result;
+        });
+        return updated;
+      });
+
       // Create Step object and add to attempt (regardless of validation result)
       if (stepStartTime) {
         const stepData: Step = {
           id: `step_${currentProblem.id}_${currentStepNumber}_${Date.now()}`,
           strokeData: [...strokes], // Deep copy strokes
-          recognizedText: recognitionResult.text || recognitionResult.latex,
-          latex: recognitionResult.latex,
+          recognizedText: recognitionResult?.text || stepLatex,
+          latex: stepLatex,
           color: selectedColor,
           validation: validationResult,
           startTime: stepStartTime,
           endTime: Date.now(),
           manualInput: false,
-          recognitionConfidence: recognitionResult.confidence,
+          recognitionConfidence: recognitionResult?.confidence,
         };
 
         addStepToAttempt(stepData);
@@ -254,7 +334,7 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
 
       // If correct and useful, reset error tracking and move to next step
       if (validationResult.isCorrect && validationResult.isUseful) {
-        addPreviousStep(recognitionResult.latex);
+        addPreviousStep(stepLatex);
         setCurrentStepNumber(currentStepNumber + 1);
         resetIncorrectAttempts();
         console.log('[TrainingModeScreen] Step validated successfully, moving to step:', currentStepNumber + 1);
@@ -262,8 +342,11 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
         // Check if this is the final answer
         const isFinalAnswer = validationResult.isFinalAnswer;
         if (isFinalAnswer) {
-          console.log('[TrainingModeScreen] Final answer reached, ending attempt as solved');
+          console.log('[TrainingModeScreen] Final answer reached, showing success animation');
           endAttempt(true);
+
+          // Show success animation
+          setShowSuccessAnimation(true);
         }
       } else if (!validationResult.isCorrect) {
         // Track incorrect attempt in hint store
@@ -318,8 +401,10 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
 
   const handleClearCanvas = () => {
     clearStrokes();
+    clearRecognitionHistory(); // Clear recognition history to prevent memory growth
     setStrokeCount(0);
-    console.log('Canvas cleared');
+    setStepResults([]); // Clear all step results
+    console.log('Canvas cleared (including recognition history)');
   };
 
   const handleBackToHome = () => {
@@ -328,6 +413,9 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       endAttempt(false);
       console.log('[TrainingModeScreen] Ended incomplete attempt, navigating to Home');
     }
+
+    // Clear recognition history before leaving to free memory
+    clearRecognitionHistory();
 
     navigation.navigate('Home');
   };
@@ -355,6 +443,14 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
     }
   };
 
+  const handleSuccessAnimationComplete = () => {
+    // Hide animation
+    setShowSuccessAnimation(false);
+
+    // Move to next problem
+    handleNextProblem();
+  };
+
   const handleRequestHint = () => {
     if (!currentProblem || !currentValidation) {
       console.warn('[TrainingModeScreen] Cannot request hint: no current problem or validation');
@@ -377,16 +473,8 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
     console.log('[TrainingModeScreen] Hint requested for error type:', errorType);
   };
 
-  // Auto-show manual input fallback on recognition error
-  useEffect(() => {
-    if (recognitionStatus === RecognitionStatus.ERROR) {
-      // Wait 2 seconds before showing manual input option
-      const timer = setTimeout(() => {
-        setShowManualInput(true);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [recognitionStatus]);
+  // Manual input is now triggered by user tapping the error message
+  // (removed automatic modal popup)
 
   // Cleanup: end incomplete attempt on component unmount
   useEffect(() => {
@@ -395,8 +483,12 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
         console.log('[TrainingModeScreen] Component unmounting, ending incomplete attempt');
         endAttempt(false);
       }
+      // Clear auto-validation timer on unmount
+      if (autoValidationTimer) {
+        clearTimeout(autoValidationTimer);
+      }
     };
-  }, [currentAttempt, endAttempt]);
+  }, [currentAttempt, endAttempt, autoValidationTimer]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -404,50 +496,8 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
         {/* App Header */}
         <AppHeader />
 
-        {/* Problem Display - Fixed at top */}
-        <ProblemDisplay
-          problem={currentProblem}
-          showDifficulty={true}
-          showInstructions={true}
-        />
-
-      {/* Full-screen canvas (below problem) */}
-      <View style={styles.canvasWrapper}>
-        <HandwritingCanvas
-          selectedColor={selectedColor}
-          selectedTool={selectedTool}
-          showLineGuides={showLineGuides}
-          enableRecognition={true}
-          onStrokeComplete={handleStrokeComplete}
-          onStrokesChange={handleStrokesChange}
-          onRecognitionComplete={handleRecognitionComplete}
-        />
-      </View>
-
-      {/* Recognition indicator (top right corner) */}
-      <RecognitionIndicator
-        top={75}
-        showConfidence={false}
-        showErrors={true}
-      />
-
-      {/* Control buttons container (below recognition banner) */}
+      {/* Control buttons container (below header) */}
       <View style={styles.controlsContainer}>
-        {/* Validate Step button */}
-        <TouchableOpacity
-          style={[
-            styles.validateButton,
-            !recognitionResult?.latex && styles.validateButtonDisabled,
-          ]}
-          onPress={handleValidateStep}
-          activeOpacity={0.7}
-          disabled={!recognitionResult?.latex}
-        >
-          <Text style={styles.validateButtonText}>
-            Validate Step {currentStepNumber}
-          </Text>
-        </TouchableOpacity>
-
         {/* Next Problem button */}
         <TouchableOpacity
           style={styles.nextProblemButton}
@@ -475,18 +525,54 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
           <Text style={styles.clearButtonText}>Clear Canvas</Text>
         </TouchableOpacity>
 
-        {/* Endpoint toggle button */}
+        {/* Clear Cache button (DEV) */}
         <TouchableOpacity
-          style={styles.endpointToggle}
-          onPress={handleToggleEndpoint}
+          style={[styles.clearButton, { backgroundColor: '#FF9500' }]}
+          onPress={() => {
+            const { clearValidationCache } = require('../utils/storage');
+            clearValidationCache();
+            console.log('[TrainingModeScreen] Validation cache cleared');
+          }}
           activeOpacity={0.7}
         >
-          <Text style={styles.endpointLabel}>Endpoint:</Text>
-          <Text style={styles.endpointValue}>{currentEndpoint}</Text>
-          <Text style={styles.endpointHint}>
-            {currentEndpoint === 'batch' ? '(legacy)' : '(standard)'}
-          </Text>
+          <Text style={styles.clearButtonText}>Clear Cache</Text>
         </TouchableOpacity>
+
+        {/* Manual Check button */}
+        <TouchableOpacity
+          style={[styles.clearButton, { backgroundColor: '#34C759' }]}
+          onPress={handleManualCheck}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.clearButtonText}>Check Now</Text>
+        </TouchableOpacity>
+      </View>
+
+        {/* Problem Display - Between buttons and canvas */}
+        <View style={styles.problemContainer}>
+          <ProblemDisplay
+            problem={currentProblem}
+            showDifficulty={true}
+            showInstructions={true}
+          />
+        </View>
+
+      {/* Full-screen canvas (below problem) */}
+      <View style={styles.canvasWrapper}>
+        <HandwritingCanvas
+          selectedColor={selectedColor}
+          selectedTool={selectedTool}
+          showLineGuides={showLineGuides}
+          enableRecognition={true}
+          onStrokeComplete={handleStrokeComplete}
+          onStrokesChange={handleStrokesChange}
+          onRecognitionComplete={handleRecognitionComplete}
+        />
+
+        {/* Step results display (on right side of each line) - limited to last 10 for performance */}
+        {stepResults.slice(-10).map((stepResult, index) => (
+          <StepResultDisplay key={`step-${stepResult.lineNumber}-${index}`} stepResult={stepResult} />
+        ))}
       </View>
 
       {/* Floating toolbar (draggable) */}
@@ -504,13 +590,6 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
         />
       )}
 
-      {/* Toggle button (shows when toolbar is hidden) */}
-      <ToggleButton
-        isToolbarVisible={isToolbarVisible}
-        toolbarPosition={toolbarPosition}
-        onPress={handleToggleToolbar}
-      />
-
       {/* Welcome modal (first launch only) */}
       <WelcomeModal
         visible={showWelcome}
@@ -525,12 +604,32 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
         onRequestHint={handleRequestHint}
       />
 
+      {/* Recognition error banner (tap to enter manually) */}
+      {recognitionStatus === RecognitionStatus.ERROR && !showManualInput && (
+        <TouchableOpacity
+          style={styles.errorBanner}
+          onPress={() => setShowManualInput(true)}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.errorBannerText}>
+            Recognition failed - Tap here to enter manually
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Manual input fallback (shows on recognition error) */}
       <ManualInputFallback
         visible={showManualInput}
         onSubmit={handleManualInput}
         onCancel={() => setShowManualInput(false)}
         initialValue={recognitionResult?.text || ''}
+      />
+
+      {/* Success animation (shows when problem is completed) */}
+      <SuccessAnimation
+        visible={showSuccessAnimation}
+        onComplete={handleSuccessAnimationComplete}
+        duration={2500}
       />
       </View>
     </SafeAreaView>
@@ -549,13 +648,24 @@ const styles = StyleSheet.create({
   canvasWrapper: {
     flex: 1,
   },
+  problemContainer: {
+    position: 'absolute',
+    top: 120,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
   controlsContainer: {
     position: 'absolute',
-    top: 180, // Below header + problem display + recognition banner
+    top: 75,
+    left: 20,
     right: 20,
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    zIndex: 100,
   },
   nextProblemButton: {
     backgroundColor: '#007AFF',
@@ -605,52 +715,26 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
   },
-  endpointToggle: {
-    backgroundColor: '#FFFFFF',
+  errorBanner: {
+    position: 'absolute',
+    top: 80,
+    left: 20,
+    right: 20,
+    backgroundColor: '#FF9500',
     borderRadius: 12,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  endpointLabel: {
-    fontSize: 12,
-    color: '#666666',
-    fontWeight: '500',
-  },
-  endpointValue: {
-    fontSize: 14,
-    color: '#000000',
-    fontWeight: '700',
-  },
-  endpointHint: {
-    fontSize: 11,
-    color: '#999999',
-    fontStyle: 'italic',
-  },
-  validateButton: {
-    backgroundColor: '#34C759',
-    borderRadius: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
-    elevation: 4,
+    elevation: 5,
+    zIndex: 10,
   },
-  validateButtonDisabled: {
-    backgroundColor: '#A8A8A8',
-    opacity: 0.5,
-  },
-  validateButtonText: {
+  errorBannerText: {
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
+    textAlign: 'center',
   },
 });
