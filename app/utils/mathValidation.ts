@@ -287,7 +287,9 @@ function parseCameraMathResponse(
     );
 
     isCorrect = matchingStep !== null;
-    isUseful = isStepUseful(
+    // Only evaluate usefulness if the step is correct
+    // Incorrect steps are never useful by definition
+    isUseful = isCorrect && isStepUseful(
       request.studentStep,
       request.previousSteps?.[request.previousSteps.length - 1],
       matchingStep
@@ -567,6 +569,14 @@ export function isFinalAnswer(
  * Returns a hint based on current progress and expected steps.
  * Used by hint system (PR6).
  */
+/**
+ * Get next step hint (legacy wrapper)
+ *
+ * NOTE: This function is now a legacy wrapper. For new code, use hintStore.requestHint() directly
+ * which provides more sophisticated hint selection based on error types and escalation tracking.
+ *
+ * This wrapper provides basic hints based on expected steps for backward compatibility.
+ */
 export function getNextStepHint(
   problemId: string,
   currentStepNumber: number,
@@ -585,6 +595,8 @@ export function getNextStepHint(
     return 'You\'re almost there! Check if you\'ve reached the solution.';
   }
 
+  // Provide hints based on expected steps (generic approach)
+  // For error-specific hints, use hintStore.requestHint() instead
   switch (hintLevel) {
     case 'concept':
       return `Think about what operation would help ${nextExpectedStep.description.toLowerCase()}.`;

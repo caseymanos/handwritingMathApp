@@ -5,7 +5,7 @@
  * Shows correct/incorrect status, usefulness, and actionable feedback.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import {
 } from 'react-native';
 import { ValidationStatus, ValidationErrorType } from '../types/Validation';
 import { useValidationStore } from '../stores/validationStore';
+import { useHintStore } from '../stores/hintStore';
+import { getHintLevelDisplayText, getHintLevelIcon } from '../utils/hintUtils';
 
 /**
  * Props for ValidationFeedback
@@ -47,8 +49,8 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
   const status = useValidationStore(state => state.status);
   const currentValidation = useValidationStore(state => state.currentValidation);
   const error = useValidationStore(state => state.error);
-  const currentHint = useValidationStore(state => state.currentHint);
-  const hintLevel = useValidationStore(state => state.hintLevel);
+  const currentHint = useHintStore(state => state.currentHint);
+  const hintLevel = useHintStore(state => state.currentHint?.level);
 
   const fadeAnim = React.useRef(new Animated.Value(0)).current;
   const slideAnim = React.useRef(new Animated.Value(50)).current;
@@ -219,9 +221,14 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
           {currentHint && (
             <View style={styles.hintContainer}>
               <Text style={styles.hintLabel}>
-                💡 Hint ({hintLevel === 'concept' ? 'Concept' : hintLevel === 'direction' ? 'Direction' : 'Specific'}):
+                {hintLevel ? getHintLevelIcon(hintLevel) : '💡'} Hint ({hintLevel ? getHintLevelDisplayText(hintLevel) : 'General'}):
               </Text>
-              <Text style={styles.hintText}>{currentHint}</Text>
+              <Text style={styles.hintText}>{currentHint.text}</Text>
+              {hintLevel && (
+                <Text style={styles.hintLevelBadge}>
+                  Level: {hintLevel}
+                </Text>
+              )}
             </View>
           )}
 
@@ -383,6 +390,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#fff',
     lineHeight: 20,
+  },
+  hintLevelBadge: {
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontWeight: '600',
+    marginTop: 6,
+    textTransform: 'capitalize',
   },
 
   // Status-based styles
