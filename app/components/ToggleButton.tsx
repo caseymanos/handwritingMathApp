@@ -7,6 +7,7 @@
 import React from 'react';
 import { TouchableOpacity, StyleSheet, Text } from 'react-native';
 import { ToolbarPosition } from '../types/Canvas';
+import { Colors, Shadows, Spacing, TextStyles } from '../styles';
 
 interface ToggleButtonProps {
   isToolbarVisible: boolean;
@@ -73,14 +74,10 @@ const styles = StyleSheet.create({
     height: 50,
     top: '50%',
     borderRadius: 25,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: Colors.ui.overlay,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    ...Shadows.medium,
   },
   icon: {
     fontSize: 24,

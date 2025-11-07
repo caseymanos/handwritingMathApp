@@ -77,6 +77,7 @@ export const Colors = {
     shadow: 'rgba(0, 0, 0, 0.1)',
     overlay: 'rgba(0, 0, 0, 0.5)',
     disabled: '#f3f4f6',
+    inactive: '#e5e7eb', // For inactive UI elements
   },
 
   // Difficulty badge colors

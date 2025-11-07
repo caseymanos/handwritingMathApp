@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Colors, Spacing, TextStyles, Shadows, Typography } from '../styles';
 
 /**
  * Props for ManualInputFallback
@@ -94,7 +95,7 @@ export const ManualInputFallback: React.FC<ManualInputFallbackProps> = ({
             value={input}
             onChangeText={setInput}
             placeholder={placeholder}
-            placeholderTextColor="#999"
+            placeholderTextColor={Colors.text.tertiary}
             autoFocus
             multiline
             numberOfLines={3}
@@ -157,99 +158,91 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: Colors.ui.overlay,
   },
   container: {
     width: '85%',
     maxWidth: 500,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
+    backgroundColor: Colors.background.primary,
+    borderRadius: Spacing.md,
+    padding: Spacing.lg,
+    ...Shadows.large,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+    ...TextStyles.h1,
+    color: Colors.text.primary,
+    marginBottom: Spacing.sm,
   },
   description: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
+    ...TextStyles.bodyMedium,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.lg,
   },
   input: {
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 18,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    color: '#333',
+    backgroundColor: Colors.background.tertiary,
+    borderRadius: Spacing.sm,
+    padding: Spacing.md,
+    ...TextStyles.bodyLarge,
+    fontFamily: Typography.fontFamily.mono,
+    color: Colors.text.primary,
     minHeight: 100,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: Colors.ui.border,
   },
   exampleContainer: {
-    marginTop: 16,
-    padding: 12,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 8,
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    backgroundColor: Colors.background.secondary,
+    borderRadius: Spacing.sm,
     borderLeftWidth: 3,
-    borderLeftColor: '#2196F3',
+    borderLeftColor: Colors.primary.main,
   },
   exampleTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 6,
+    ...TextStyles.labelMedium,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.sm,
   },
   exampleText: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    ...TextStyles.bodySmall,
+    color: Colors.text.secondary,
+    fontFamily: Typography.fontFamily.mono,
     marginVertical: 2,
   },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 24,
-    gap: 12,
+    marginTop: Spacing.lg,
+    gap: Spacing.md,
   },
   button: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 8,
+    paddingVertical: Spacing.md,
+    borderRadius: Spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.background.tertiary,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: Colors.ui.border,
   },
   cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    ...TextStyles.buttonMedium,
+    color: Colors.text.secondary,
   },
   submitButton: {
-    backgroundColor: '#2196F3',
+    backgroundColor: Colors.primary.main,
   },
   submitButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: Colors.ui.disabled,
   },
   submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
+    ...TextStyles.buttonMedium,
+    color: Colors.primary.contrast,
   },
   submitButtonTextDisabled: {
-    color: '#999',
+    color: Colors.text.tertiary,
   },
 });
 

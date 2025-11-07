@@ -31,10 +31,11 @@ import { useStylus } from '../hooks/useStylus';
 import { calculateStrokeWidth, getEraserWidth } from '../utils/pressureUtils';
 import { useCanvasStore } from '../stores/canvasStore';
 import { useRecognition } from '../hooks/useRecognition';
+import { Colors } from '../styles';
 
 // Line guide configuration
 const LINE_GUIDE_SPACING = 60; // pixels between horizontal guides
-const LINE_GUIDE_COLOR = '#E0E0E0';
+const LINE_GUIDE_COLOR = Colors.ui.divider;
 
 interface HandwritingCanvasProps {
   selectedColor?: CanvasColor;
@@ -292,7 +293,7 @@ const styles = StyleSheet.create({
   },
   canvasContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.background.canvas,
   },
   canvas: {
     flex: 1,

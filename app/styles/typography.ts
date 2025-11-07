@@ -161,6 +161,14 @@ export const TextStyles = {
     fontWeight: Typography.fontWeight.medium,
   },
 
+  // Caption styles (small supplementary text)
+  captionSmall: {
+    fontFamily: Typography.fontFamily.regular,
+    fontSize: Typography.fontSize.xs,
+    lineHeight: Typography.lineHeight.xs,
+    fontWeight: Typography.fontWeight.regular,
+  },
+
   // Button styles
   buttonLarge: {
     fontFamily: Typography.fontFamily.medium,
