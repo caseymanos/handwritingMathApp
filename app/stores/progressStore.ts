@@ -101,17 +101,22 @@ function generateSessionId(): string {
 }
 
 /**
- * Get or create session ID
+ * Get or create session ID (lazy initialization)
  */
 function getSessionId(): string {
-  const stored = storage.getString(STORAGE_KEYS.SESSION_ID);
-  if (stored) {
-    return stored;
-  }
+  try {
+    const stored = storage.getString(STORAGE_KEYS.SESSION_ID);
+    if (stored) {
+      return stored;
+    }
 
-  const newSessionId = generateSessionId();
-  storage.set(STORAGE_KEYS.SESSION_ID, newSessionId);
-  return newSessionId;
+    const newSessionId = generateSessionId();
+    storage.set(STORAGE_KEYS.SESSION_ID, newSessionId);
+    return newSessionId;
+  } catch (error) {
+    console.warn('[ProgressStore] Failed to get session ID from storage:', error);
+    return generateSessionId();
+  }
 }
 
 /**
@@ -119,7 +124,7 @@ function getSessionId(): string {
  */
 const initialState = {
   currentAttempt: null,
-  currentSessionId: getSessionId(),
+  currentSessionId: '', // Will be initialized lazily
   sessionStartTime: Date.now(),
   attempts: [],
   attemptCount: 0,
@@ -559,6 +564,9 @@ export const useProgressStore = create<ProgressStoreState>((set, get) => ({
 
   loadFromStorage: () => {
     try {
+      // Initialize session ID first
+      const sessionId = getSessionId();
+
       // Load attempts
       const attemptsData = storage.getString(STORAGE_KEYS.ATTEMPTS);
       const attempts = attemptsData ? JSON.parse(attemptsData) : [];
@@ -583,6 +591,7 @@ export const useProgressStore = create<ProgressStoreState>((set, get) => ({
       );
 
       set({
+        currentSessionId: sessionId,
         attempts,
         attemptCount: attempts.length,
         currentAttempt,
@@ -599,6 +608,14 @@ export const useProgressStore = create<ProgressStoreState>((set, get) => ({
       console.log('[ProgressStore] Loaded from storage:', attempts.length, 'attempts');
     } catch (error) {
       console.error('[ProgressStore] Failed to load from storage:', error);
+      // Still initialize session ID even if load fails
+      try {
+        const sessionId = getSessionId();
+        set({ currentSessionId: sessionId });
+      } catch (sessionError) {
+        console.error('[ProgressStore] Failed to initialize session ID:', sessionError);
+        set({ currentSessionId: generateSessionId() });
+      }
     }
   },
 }));
