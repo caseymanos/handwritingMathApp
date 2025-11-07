@@ -12,11 +12,11 @@ function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <SafeAreaProvider edges={[]}>
+    <SafeAreaProvider>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
         backgroundColor="#FFFFFF"
-        translucent={true}
+        translucent={false}
       />
       <CanvasDemoScreen />
     </SafeAreaProvider>

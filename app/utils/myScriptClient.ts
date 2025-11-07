@@ -44,7 +44,7 @@ console.log('Environment variable check:', {
 const DEFAULT_CONFIG: Partial<MyScriptConfig> = {
   apiUrl: 'https://cloud.myscript.com/api/v4.0/iink',
   timeout: 10000, // 10 seconds
-  endpoint: 'batch', // Default to batch endpoint (legacy engines, well-documented)
+  endpoint: 'recognize', // Standard endpoint (latest engines, best accuracy)
 };
 
 /**
@@ -348,7 +348,7 @@ export class MyScriptClient {
       apiUrl: this.config.apiUrl,
       hasApplicationKey: !!this.config.applicationKey,
       hasHmacKey: !!this.config.hmacKey,
-      endpoint: this.config.endpoint || 'batch',
+      endpoint: this.config.endpoint || 'recognize',
     };
   }
 }

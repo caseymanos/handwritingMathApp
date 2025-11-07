@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HandwritingCanvas } from '../components/HandwritingCanvas';
 import { FloatingToolbar } from '../components/FloatingToolbar';
@@ -14,6 +15,9 @@ import { ToggleButton } from '../components/ToggleButton';
 import { WelcomeModal } from '../components/WelcomeModal';
 import { RecognitionIndicator } from '../components/RecognitionIndicator';
 import { ManualInputFallback } from '../components/ManualInputFallback';
+import { ProblemDisplay } from '../components/ProblemDisplay';
+import { ValidationFeedback } from '../components/ValidationFeedback';
+import { AppHeader } from '../components/AppHeader';
 import {
   DrawingTool,
   CANVAS_COLORS,
@@ -21,9 +25,13 @@ import {
   Stroke,
   ToolbarPosition,
 } from '../types/Canvas';
+import { Problem, ProblemDifficulty } from '../types/Problem';
 import { useCanvasStore } from '../stores/canvasStore';
+import { useValidationStore } from '../stores/validationStore';
 import { RecognitionStatus, MyScriptEndpoint } from '../types/MyScript';
 import { getMyScriptClient } from '../utils/myScriptClient';
+import { getRandomProblem, getNextProblem } from '../utils/problemData';
+import { getNextStepHint } from '../utils/mathValidation';
 
 const WELCOME_MODAL_KEY = '@handwriting_math:welcome_shown';
 
@@ -42,10 +50,41 @@ export const CanvasDemoScreen: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(false);
   const [strokeCount, setStrokeCount] = useState(0);
   const [showManualInput, setShowManualInput] = useState(false);
-  const [currentEndpoint, setCurrentEndpoint] = useState<MyScriptEndpoint>('batch');
+  const [currentEndpoint, setCurrentEndpoint] = useState<MyScriptEndpoint>('recognize');
+  const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
 
   // Access canvas store for recognition state
   const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes } = useCanvasStore();
+
+  // Access validation store
+  const {
+    validateStep,
+    setCurrentProblem: setValidationProblem,
+    setCurrentStepNumber,
+    addPreviousStep,
+    currentStepNumber,
+    requestHint,
+    getNextHintLevel,
+  } = useValidationStore();
+
+  // Track hint state locally for display
+  const currentHint = useValidationStore(state => state.currentHint);
+  const hintLevel = useValidationStore(state => state.hintLevel);
+
+  // Initialize with a random easy problem
+  useEffect(() => {
+    const initialProblem = getRandomProblem(ProblemDifficulty.EASY);
+    setCurrentProblem(initialProblem);
+    console.log('Initial problem loaded:', initialProblem.id);
+  }, []);
+
+  // Initialize validation store when problem changes
+  useEffect(() => {
+    if (currentProblem) {
+      setValidationProblem(currentProblem.id);
+      console.log('[CanvasDemoScreen] Validation store initialized for problem:', currentProblem.id);
+    }
+  }, [currentProblem, setValidationProblem]);
 
   // Initialize endpoint from client on mount
   useEffect(() => {
@@ -126,6 +165,36 @@ export const CanvasDemoScreen: React.FC = () => {
     }
   };
 
+  const handleValidateStep = async () => {
+    if (!recognitionResult?.latex || !currentProblem) {
+      console.warn('[CanvasDemoScreen] Cannot validate: no recognition result or problem');
+      return;
+    }
+
+    try {
+      console.log('[CanvasDemoScreen] Validating step:', currentStepNumber, recognitionResult.latex);
+
+      const validationResult = await validateStep({
+        problemId: currentProblem.id,
+        studentStep: recognitionResult.latex,
+        stepNumber: currentStepNumber,
+        previousSteps: [],
+        problemStatement: currentProblem.latex,
+      });
+
+      console.log('[CanvasDemoScreen] Validation result:', validationResult);
+
+      // If correct, add to previous steps and increment step number
+      if (validationResult.isCorrect && validationResult.isUseful) {
+        addPreviousStep(recognitionResult.latex);
+        setCurrentStepNumber(currentStepNumber + 1);
+        console.log('[CanvasDemoScreen] Step validated successfully, moving to step:', currentStepNumber + 1);
+      }
+    } catch (error) {
+      console.error('[CanvasDemoScreen] Validation failed:', error);
+    }
+  };
+
   const handleManualInput = (input: string) => {
     console.log('Manual input:', input);
     // Create a manual recognition result
@@ -156,6 +225,46 @@ export const CanvasDemoScreen: React.FC = () => {
     console.log('Canvas cleared');
   };
 
+  const handleNextProblem = () => {
+    if (currentProblem) {
+      const nextProblem = getNextProblem(currentProblem.id);
+      if (nextProblem) {
+        setCurrentProblem(nextProblem);
+        handleClearCanvas(); // Clear canvas for new problem
+        console.log('Next problem loaded:', nextProblem.id);
+      } else {
+        console.log('No more problems, looping back to first problem');
+        // Loop back to first easy problem
+        const firstProblem = getRandomProblem(ProblemDifficulty.EASY);
+        setCurrentProblem(firstProblem);
+        handleClearCanvas();
+      }
+    }
+  };
+
+  const handleRequestHint = () => {
+    if (!currentProblem) {
+      console.warn('[CanvasDemoScreen] Cannot request hint: no current problem');
+      return;
+    }
+
+    console.log('[CanvasDemoScreen] Requesting hint');
+
+    // Get next hint level from store
+    const nextLevel = getNextHintLevel();
+
+    // Get the actual hint text
+    const hint = getNextStepHint(currentProblem.id, currentStepNumber, nextLevel);
+
+    // Update store with new hint and level
+    useValidationStore.setState({
+      currentHint: hint,
+      hintLevel: nextLevel,
+    });
+
+    console.log('[CanvasDemoScreen] Hint requested:', nextLevel, hint);
+  };
+
   // Auto-show manual input fallback on recognition error
   useEffect(() => {
     if (recognitionStatus === RecognitionStatus.ERROR) {
@@ -168,8 +277,19 @@ export const CanvasDemoScreen: React.FC = () => {
   }, [recognitionStatus]);
 
   return (
-    <View style={styles.container}>
-      {/* Full-screen canvas */}
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.container}>
+        {/* App Header */}
+        <AppHeader />
+
+        {/* Problem Display - Fixed at top */}
+        <ProblemDisplay
+          problem={currentProblem}
+          showDifficulty={true}
+          showInstructions={true}
+        />
+
+      {/* Full-screen canvas (below problem) */}
       <View style={styles.canvasWrapper}>
         <HandwritingCanvas
           selectedColor={selectedColor}
@@ -182,15 +302,39 @@ export const CanvasDemoScreen: React.FC = () => {
         />
       </View>
 
-      {/* Recognition indicator (shows status and results) */}
+      {/* Recognition indicator (top right corner) */}
       <RecognitionIndicator
-        top={20}
-        showConfidence={true}
+        top={75}
+        showConfidence={false}
         showErrors={true}
       />
 
       {/* Control buttons container (below recognition banner) */}
       <View style={styles.controlsContainer}>
+        {/* Validate Step button */}
+        <TouchableOpacity
+          style={[
+            styles.validateButton,
+            !recognitionResult?.latex && styles.validateButtonDisabled,
+          ]}
+          onPress={handleValidateStep}
+          activeOpacity={0.7}
+          disabled={!recognitionResult?.latex}
+        >
+          <Text style={styles.validateButtonText}>
+            Validate Step {currentStepNumber}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Next Problem button */}
+        <TouchableOpacity
+          style={styles.nextProblemButton}
+          onPress={handleNextProblem}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.nextProblemText}>Next Problem</Text>
+        </TouchableOpacity>
+
         {/* Clear Canvas button */}
         <TouchableOpacity
           style={styles.clearButton}
@@ -209,7 +353,7 @@ export const CanvasDemoScreen: React.FC = () => {
           <Text style={styles.endpointLabel}>Endpoint:</Text>
           <Text style={styles.endpointValue}>{currentEndpoint}</Text>
           <Text style={styles.endpointHint}>
-            {currentEndpoint === 'batch' ? '(legacy)' : '(latest)'}
+            {currentEndpoint === 'batch' ? '(legacy)' : '(standard)'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -242,6 +386,14 @@ export const CanvasDemoScreen: React.FC = () => {
         onDismiss={handleWelcomeDismiss}
       />
 
+      {/* Validation feedback (shows validation results) */}
+      <ValidationFeedback
+        bottom={120}
+        showConfidence={false}
+        showSuggestedSteps={true}
+        onRequestHint={handleRequestHint}
+      />
+
       {/* Manual input fallback (shows on recognition error) */}
       <ManualInputFallback
         visible={showManualInput}
@@ -249,25 +401,46 @@ export const CanvasDemoScreen: React.FC = () => {
         onCancel={() => setShowManualInput(false)}
         initialValue={recognitionResult?.text || ''}
       />
-    </View>
+      </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F5F5F7',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F5F5F7', // Light grey so we can see white elements
   },
   canvasWrapper: {
     flex: 1,
   },
   controlsContainer: {
     position: 'absolute',
-    top: 80, // Below the recognition banner
+    top: 180, // Below header + problem display + recognition banner
     right: 20,
     flexDirection: 'row',
     gap: 12,
     alignItems: 'center',
+  },
+  nextProblemButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  nextProblemText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   clearButton: {
     backgroundColor: '#FF3B30',
@@ -312,5 +485,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999999',
     fontStyle: 'italic',
+  },
+  validateButton: {
+    backgroundColor: '#34C759',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  validateButtonDisabled: {
+    backgroundColor: '#A8A8A8',
+    opacity: 0.5,
+  },
+  validateButtonText: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });

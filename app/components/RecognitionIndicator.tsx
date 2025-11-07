@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
+import Katex from 'react-native-katex';
 import { RecognitionStatus } from '../types/MyScript';
 import { formatRecognitionResult, getConfidenceLevel } from '../utils/recognitionUtils';
 import { useCanvasStore } from '../stores/canvasStore';
@@ -104,18 +105,20 @@ export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
 
       if (result.status === RecognitionStatus.SUCCESS) {
         return (
-          <View style={styles.contentColumn}>
-            <Text style={styles.successText}>✓ Recognized</Text>
+          <View style={styles.contentRow}>
             {result.latex && (
-              <Text style={styles.resultText} numberOfLines={2}>
-                {result.latex}
-              </Text>
-            )}
-            {showConfidence && result.confidence !== undefined && (
-              <Text style={styles.confidenceText}>
-                Confidence: {(result.confidence * 100).toFixed(0)}% (
-                {getConfidenceLevel(result.confidence)})
-              </Text>
+              <View style={styles.katexContainer}>
+                <Katex
+                  expression={result.latex}
+                  displayMode={false}
+                  style={styles.katex}
+                  inlineStyle={`
+                    html, body { display: flex; align-items: center; }
+                    .katex { font-size: 1.2em; margin: 0; }
+                  `}
+                  onError={(error) => console.log('[RecognitionIndicator] KaTeX render error:', error)}
+                />
+              </View>
             )}
           </View>
         );
@@ -143,16 +146,17 @@ export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: 20,
     right: 20,
-    padding: 16,
-    borderRadius: 12,
+    padding: 8,
+    borderRadius: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
     zIndex: 1000,
+    minWidth: 60,
+    maxWidth: 200,
   },
   idle: {
     backgroundColor: '#666',
@@ -177,33 +181,37 @@ const styles = StyleSheet.create({
   },
   text: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   successText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   errorText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
   },
   errorDetailText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     opacity: 0.9,
   },
-  resultText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '500',
-    fontFamily: 'Courier', // Monospace for LaTeX
+  katexContainer: {
+    flex: 1,
+    height: 30,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  katex: {
+    flex: 1,
   },
   confidenceText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     opacity: 0.8,
   },
 });

@@ -193,6 +193,49 @@ interface ValidationResult {
 }
 ```
 
+#### Problem
+```typescript
+interface Problem {
+  id: string;                    // Unique identifier (e.g., "le_easy_01")
+  category: ProblemCategory;     // LINEAR_EQUATIONS, BASIC_ALGEBRA, etc.
+  difficulty: ProblemDifficulty; // EASY, MEDIUM, or HARD
+  text: string;                   // Plain text for accessibility
+  latex: string;                  // LaTeX formatted for KaTeX rendering
+  answer: string;                 // Final answer (plain text)
+  answerLatex: string;           // LaTeX formatted answer
+  expectedSteps: ExpectedStep[]; // Solution steps for validation
+  hints?: string[];              // Optional hints (used in PR6)
+  tags?: string[];               // Tags for categorization
+}
+```
+
+#### ExpectedStep
+```typescript
+interface ExpectedStep {
+  stepNumber: number;   // Sequential step number
+  description: string;  // What this step does
+  expression: string;   // LaTeX mathematical expression
+  operation: string;    // Operation performed (e.g., "add 5 to both sides")
+}
+```
+
+### Problem Data
+- **Location**: `app/utils/problemData.ts` (hardcoded for MVP)
+- **Library Size**: 25 linear equation problems
+  - 5 EASY (one-step: x + 5 = 12)
+  - 10 MEDIUM (two-step: 2x + 3 = 11)
+  - 10 HARD (variables both sides: 3x + 7 = 2x + 15)
+- **Format**: LaTeX for math rendering via react-native-katex
+- **Components**:
+  - `ProblemDisplay.tsx` - Renders problem with KaTeX
+  - `FormattedStep.tsx` - Renders solution steps with feedback
+- **Helper Functions**:
+  - `getProblemById(id)` - Retrieve specific problem
+  - `getRandomProblem(difficulty?)` - Get random problem
+  - `getNextProblem(currentId)` - Get next in sequence
+  - `getProblemStats()` - Get library statistics
+- **Documentation**: See `docs/PROBLEM_DATA_FORMAT.md` for detailed format guide
+
 ## Key Implementation Patterns
 
 ### Performance Optimization
