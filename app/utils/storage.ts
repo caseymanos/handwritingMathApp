@@ -465,3 +465,9 @@ export function exportStorageData(): {
     return { validation: [], attempts: [], app: {} };
   }
 }
+
+/**
+ * Default storage export for general app use
+ * (Used by progressStore, hintStore, etc.)
+ */
+export const storage = appStorage;
