@@ -16,6 +16,7 @@ import Katex from 'react-native-katex';
 import { RecognitionStatus } from '../types/MyScript';
 import { formatRecognitionResult, getConfidenceLevel } from '../utils/recognitionUtils';
 import { useCanvasStore } from '../stores/canvasStore';
+import { Colors, Spacing, TextStyles, Shadows } from '../styles';
 
 /**
  * Props for RecognitionIndicator
@@ -67,17 +68,17 @@ export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
     return null;
   }
 
-  // Determine colors and content based on status
-  const getStatusStyle = () => {
+  // Get background color based on status
+  const getBackgroundColor = (): string => {
     switch (status) {
       case RecognitionStatus.PROCESSING:
-        return styles.processing;
+        return Colors.primary.main;
       case RecognitionStatus.SUCCESS:
-        return styles.success;
+        return Colors.feedback.success;
       case RecognitionStatus.ERROR:
-        return styles.error;
+        return Colors.feedback.error;
       default:
-        return styles.idle;
+        return Colors.ui.overlay;
     }
   };
 
@@ -132,8 +133,11 @@ export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
     <Animated.View
       style={[
         styles.container,
-        getStatusStyle(),
-        { top, opacity: fadeAnim },
+        {
+          backgroundColor: getBackgroundColor(),
+          top,
+          opacity: fadeAnim,
+        },
       ]}
       accessibilityLabel="Recognition status indicator"
       accessibilityLiveRegion="polite"
@@ -146,72 +150,53 @@ export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    right: 20,
-    padding: 8,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    right: Spacing.lg,
+    padding: Spacing.sm,
+    borderRadius: Spacing.component.borderRadius,
+    ...Shadows.medium,
     zIndex: 1000,
     minWidth: 60,
     maxWidth: 200,
   },
-  idle: {
-    backgroundColor: '#666',
-  },
-  processing: {
-    backgroundColor: '#2196F3', // Blue
-  },
-  success: {
-    backgroundColor: '#4CAF50', // Green
-  },
-  error: {
-    backgroundColor: '#F44336', // Red
-  },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   contentColumn: {
     flexDirection: 'column',
-    gap: 8,
+    gap: Spacing.sm,
   },
   text: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    ...TextStyles.labelMedium,
+    color: Colors.primary.contrast,
   },
   successText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    ...TextStyles.labelMedium,
+    color: Colors.primary.contrast,
   },
   errorText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
+    ...TextStyles.labelMedium,
+    color: Colors.primary.contrast,
   },
   errorDetailText: {
-    color: '#fff',
-    fontSize: 12,
+    ...TextStyles.bodySmall,
+    color: Colors.primary.contrast,
     opacity: 0.9,
   },
   katexContainer: {
     flex: 1,
     height: 30,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 6,
+    borderRadius: Spacing.xs,
     overflow: 'hidden',
   },
   katex: {
     flex: 1,
   },
   confidenceText: {
-    color: '#fff',
-    fontSize: 11,
+    ...TextStyles.captionSmall,
+    color: Colors.primary.contrast,
     opacity: 0.8,
   },
 });

@@ -24,6 +24,7 @@ import {
   CanvasColor,
   ToolbarPosition,
 } from '../types/Canvas';
+import { Colors, Spacing, TextStyles, Shadows } from '../styles';
 
 interface FloatingToolbarProps {
   selectedColor: CanvasColor;
@@ -85,7 +86,7 @@ const getAbsolutePosition = (
   toolbarWidth: number,
   toolbarHeight: number
 ): { x: number; y: number } => {
-  const padding = 20;
+  const padding = Spacing.lg;
 
   switch (position) {
     case ToolbarPosition.TOP_LEFT:
@@ -282,30 +283,26 @@ const styles = StyleSheet.create({
   toolbar: {
     position: 'absolute',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    borderRadius: Spacing.component.borderRadiusLarge,
+    ...Shadows.large,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
-    paddingBottom: 8,
+    marginBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: Colors.ui.border,
   },
   dragHandle: {
     flexDirection: 'column',
-    gap: 2,
+    gap: Spacing.xs / 2,
   },
   dragIndicator: {
     width: 20,
     height: 3,
-    backgroundColor: '#CCC',
+    backgroundColor: Colors.ui.inactive,
     borderRadius: 2,
   },
   closeButton: {
@@ -315,21 +312,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeIcon: {
-    fontSize: 18,
-    color: '#666',
+    ...TextStyles.h3,
+    color: Colors.text.secondary,
   },
   section: {
-    marginBottom: 16,
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
+    ...TextStyles.labelMedium,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.sm,
     textAlign: 'center',
   },
   colorButton: {
-    marginVertical: 6,
+    marginVertical: Spacing.xs,
     alignSelf: 'center',
     justifyContent: 'center',
     alignItems: 'center',
@@ -337,22 +333,22 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   selectedBorder: {
-    borderColor: '#0066CC',
+    borderColor: Colors.primary.main,
     borderWidth: 3,
   },
   selectedDot: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
   toolButton: {
-    borderRadius: 8,
-    backgroundColor: '#F0F0F0',
+    borderRadius: Spacing.component.borderRadius,
+    backgroundColor: Colors.background.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 6,
+    marginVertical: Spacing.xs,
     alignSelf: 'center',
   },
   selectedTool: {
-    backgroundColor: '#0066CC',
+    backgroundColor: Colors.primary.main,
   },
   toolIcon: {
     // fontSize set dynamically based on device size

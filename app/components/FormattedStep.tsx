@@ -8,6 +8,7 @@
 import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import Katex from 'react-native-katex';
+import { Colors, Spacing, TextStyles, Shadows, getValidationColor } from '../styles';
 
 interface FormattedStepProps {
   stepNumber: number;
@@ -26,20 +27,20 @@ export const FormattedStep: React.FC<FormattedStepProps> = ({
   isUseful,
   showFeedback = false,
 }) => {
-  // Determine feedback icon and color
+  // Determine feedback icon and color using style system
   let feedbackIcon = '';
-  let feedbackColor = '#999999';
+  let feedbackColor = Colors.text.tertiary;
 
   if (showFeedback) {
     if (isCorrect && isUseful) {
       feedbackIcon = '✅';
-      feedbackColor = '#34C759';
+      feedbackColor = Colors.feedback.success;
     } else if (isCorrect && !isUseful) {
       feedbackIcon = '⚠️';
-      feedbackColor = '#FF9500';
+      feedbackColor = Colors.feedback.warning;
     } else if (!isCorrect) {
       feedbackIcon = '❌';
-      feedbackColor = '#FF3B30';
+      feedbackColor = Colors.feedback.error;
     }
   }
 
@@ -105,41 +106,36 @@ export const FormattedStep: React.FC<FormattedStepProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 12,
-    marginVertical: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: Colors.background.primary,
+    borderRadius: Spacing.component.borderRadius,
+    padding: Spacing.md,
+    marginVertical: Spacing.xs,
+    ...Shadows.small,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   stepBadge: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#007AFF',
+    backgroundColor: Colors.primary.main,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: Spacing.sm,
   },
   stepNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    ...TextStyles.labelSmall,
+    color: Colors.primary.contrast,
   },
   feedbackIcon: {
     fontSize: 18,
     marginLeft: 'auto',
   },
   mathContainer: {
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
     width: '100%',
   },
   katex: {
@@ -147,9 +143,9 @@ const styles = StyleSheet.create({
     height: 50,
   },
   description: {
-    fontSize: 12,
-    color: '#666666',
-    marginTop: 4,
+    ...TextStyles.bodySmall,
+    color: Colors.text.secondary,
+    marginTop: Spacing.xs,
     fontStyle: 'italic',
   },
 });
