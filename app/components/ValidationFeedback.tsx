@@ -19,6 +19,9 @@ import { ValidationStatus, ValidationErrorType } from '../types/Validation';
 import { useValidationStore } from '../stores/validationStore';
 import { useHintStore } from '../stores/hintStore';
 import { getHintLevelDisplayText, getHintLevelIcon } from '../utils/hintUtils';
+import { Colors, Spacing, TextStyles, Shadows, getValidationColor } from '../styles';
+import FeedbackAnimation from './FeedbackAnimation';
+import HintReveal from './HintReveal';
 
 /**
  * Props for ValidationFeedback
@@ -92,26 +95,27 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
     return null;
   }
 
-  // Get status indicator emoji
-  const getStatusEmoji = (): string => {
-    if (status === ValidationStatus.VALIDATING) return '🔄';
-    if (error) return '⚠️';
-    if (!currentValidation) return '';
+  // Get FeedbackAnimation status
+  const getFeedbackAnimationStatus = (): 'correct' | 'warning' | 'error' | 'idle' => {
+    if (status === ValidationStatus.VALIDATING) return 'idle';
+    if (error) return 'error';
+    if (!currentValidation) return 'idle';
 
-    if (currentValidation.isCorrect && currentValidation.isUseful) return '✅';
-    if (currentValidation.isCorrect && !currentValidation.isUseful) return '⚠️';
-    return '❌';
+    if (currentValidation.isCorrect && currentValidation.isUseful) return 'correct';
+    if (currentValidation.isCorrect && !currentValidation.isUseful) return 'warning';
+    return 'error';
   };
 
-  // Get status color
-  const getStatusStyle = () => {
-    if (status === ValidationStatus.VALIDATING) return styles.validating;
-    if (error) return styles.error;
-    if (!currentValidation) return styles.idle;
+  // Get background color based on status
+  const getBackgroundColor = (): string => {
+    if (status === ValidationStatus.VALIDATING) return Colors.primary.main;
+    if (error) return Colors.feedback.error;
+    if (!currentValidation) return Colors.ui.overlay;
 
-    if (currentValidation.isCorrect && currentValidation.isUseful) return styles.correct;
-    if (currentValidation.isCorrect && !currentValidation.isUseful) return styles.notUseful;
-    return styles.incorrect;
+    return getValidationColor(
+      currentValidation.isCorrect,
+      currentValidation.isUseful
+    );
   };
 
   // Get status title
@@ -169,9 +173,13 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
     if (currentValidation) {
       return (
         <View style={styles.contentColumn}>
-          {/* Status header */}
+          {/* Status header with animated feedback icon */}
           <View style={styles.headerRow}>
-            <Text style={styles.emoji}>{getStatusEmoji()}</Text>
+            <FeedbackAnimation
+              status={getFeedbackAnimationStatus()}
+              size={40}
+              animated={true}
+            />
             <View style={styles.headerTextContainer}>
               <Text style={styles.title}>{getStatusTitle()}</Text>
               {currentValidation.errorType && (
@@ -217,19 +225,13 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
             <Text style={styles.cachedText}>📦 Cached result</Text>
           )}
 
-          {/* Hint display */}
+          {/* Hint display with HintReveal component */}
           {currentHint && (
-            <View style={styles.hintContainer}>
-              <Text style={styles.hintLabel}>
-                {hintLevel ? getHintLevelIcon(hintLevel) : '💡'} Hint ({hintLevel ? getHintLevelDisplayText(hintLevel) : 'General'}):
-              </Text>
-              <Text style={styles.hintText}>{currentHint.text}</Text>
-              {hintLevel && (
-                <Text style={styles.hintLevelBadge}>
-                  Level: {hintLevel}
-                </Text>
-              )}
-            </View>
+            <HintReveal
+              hint={currentHint.text}
+              level={hintLevel || null}
+              animated={true}
+            />
           )}
 
           {/* Hint button */}
@@ -255,8 +257,8 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
     <Animated.View
       style={[
         styles.container,
-        getStatusStyle(),
         {
+          backgroundColor: getBackgroundColor(),
           bottom,
           opacity: fadeAnim,
           transform: [{ translateY: slideAnim }],
@@ -271,151 +273,93 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    left: 20,
-    right: 20,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    left: Spacing.lg,
+    right: Spacing.lg,
+    borderRadius: Spacing.component.borderRadiusLarge,
+    padding: Spacing.md,
+    ...Shadows.large,
     maxHeight: 250,
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   contentColumn: {
-    gap: 8,
+    gap: Spacing.sm,
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: Spacing.md,
   },
   headerTextContainer: {
     flex: 1,
   },
-  emoji: {
-    fontSize: 32,
-  },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#fff',
+    ...TextStyles.h3,
+    color: Colors.primary.contrast,
   },
   errorTypeText: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...TextStyles.labelMedium,
     color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 2,
+    marginTop: Spacing.xs / 2,
   },
   feedbackText: {
-    fontSize: 15,
+    ...TextStyles.bodyMedium,
     color: 'rgba(255, 255, 255, 0.95)',
-    lineHeight: 21,
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   subtitleText: {
-    fontSize: 14,
+    ...TextStyles.bodySmall,
     color: 'rgba(255, 255, 255, 0.85)',
-    marginTop: 4,
+    marginTop: Spacing.xs,
   },
   confidenceText: {
-    fontSize: 12,
+    ...TextStyles.labelSmall,
     color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '600',
-    marginTop: 8,
+    marginTop: Spacing.sm,
   },
   cachedText: {
-    fontSize: 11,
+    ...TextStyles.captionSmall,
     color: 'rgba(255, 255, 255, 0.6)',
     fontStyle: 'italic',
-    marginTop: 6,
+    marginTop: Spacing.xs,
   },
   suggestedStepsContainer: {
-    marginTop: 12,
+    marginTop: Spacing.md,
   },
   suggestedStepsTitle: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...TextStyles.labelMedium,
     color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   suggestedStepsScroll: {
-    marginHorizontal: -4,
+    marginHorizontal: -Spacing.xs,
   },
   suggestedStepChip: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginHorizontal: 4,
+    borderRadius: Spacing.component.borderRadius,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    marginHorizontal: Spacing.xs,
   },
   suggestedStepText: {
-    fontSize: 13,
-    color: '#fff',
-    fontWeight: '500',
+    ...TextStyles.labelMedium,
+    color: Colors.primary.contrast,
   },
   hintButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginTop: 12,
+    borderRadius: Spacing.component.borderRadius,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    marginTop: Spacing.md,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   hintButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  hintContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 12,
-  },
-  hintLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.9)',
-    marginBottom: 6,
-  },
-  hintText: {
-    fontSize: 14,
-    color: '#fff',
-    lineHeight: 20,
-  },
-  hintLevelBadge: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontWeight: '600',
-    marginTop: 6,
-    textTransform: 'capitalize',
-  },
-
-  // Status-based styles
-  validating: {
-    backgroundColor: '#4A90E2',
-  },
-  correct: {
-    backgroundColor: '#27AE60',
-  },
-  notUseful: {
-    backgroundColor: '#F39C12',
-  },
-  incorrect: {
-    backgroundColor: '#E74C3C',
-  },
-  error: {
-    backgroundColor: '#C0392B',
-  },
-  idle: {
-    backgroundColor: '#95A5A6',
+    ...TextStyles.buttonMedium,
+    color: Colors.primary.contrast,
   },
 });

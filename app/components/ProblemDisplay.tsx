@@ -9,6 +9,7 @@ import React from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import Katex from 'react-native-katex';
 import { Problem } from '../types/Problem';
+import { Colors, Spacing, TextStyles, Shadows, getDifficultyColor } from '../styles';
 
 interface ProblemDisplayProps {
   problem: Problem | null;
@@ -42,12 +43,8 @@ export const ProblemDisplay: React.FC<ProblemDisplayProps> = ({
     );
   }
 
-  // Difficulty badge color
-  const difficultyColor = {
-    easy: '#34C759',
-    medium: '#FF9500',
-    hard: '#FF3B30',
-  }[problem.difficulty];
+  // Difficulty badge color from style system
+  const difficultyColor = getDifficultyColor(problem.difficulty);
 
   return (
     <View
@@ -106,48 +103,43 @@ export const ProblemDisplay: React.FC<ProblemDisplayProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#F8F9FA',
+    backgroundColor: Colors.background.secondary,
     borderBottomWidth: 2,
-    borderBottomColor: '#E1E4E8',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    borderBottomColor: Colors.ui.border,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    ...Shadows.small,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing.sm,
   },
   difficultyBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 10,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    borderRadius: Spacing.component.borderRadius,
+    marginRight: Spacing.sm,
   },
   difficultyText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    ...TextStyles.labelSmall,
+    color: Colors.primary.contrast,
+    textTransform: 'uppercase',
   },
   problemId: {
-    fontSize: 12,
-    color: '#666666',
-    fontWeight: '500',
+    ...TextStyles.labelMedium,
+    color: Colors.text.secondary,
   },
   instructions: {
-    fontSize: 13,
-    color: '#444444',
-    marginBottom: 8,
+    ...TextStyles.bodySmall,
+    color: Colors.text.secondary,
+    marginBottom: Spacing.sm,
     fontStyle: 'italic',
     textAlign: 'center',
   },
   mathContainer: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: Spacing.sm,
     width: '100%',
   },
   katex: {
@@ -157,14 +149,14 @@ const styles = StyleSheet.create({
   fallbackText: {
     fontSize: 32,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: Colors.text.primary,
     textAlign: 'center',
     letterSpacing: 1,
   },
   noProblemText: {
-    fontSize: 14,
-    color: '#999999',
+    ...TextStyles.bodyMedium,
+    color: Colors.text.tertiary,
     textAlign: 'center',
-    paddingVertical: 20,
+    paddingVertical: Spacing.lg,
   },
 });

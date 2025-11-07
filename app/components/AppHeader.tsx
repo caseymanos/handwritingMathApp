@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Colors, Spacing, TextStyles } from '../styles';
 
 /**
  * AppHeader Component
@@ -23,17 +24,15 @@ export const AppHeader: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
+    backgroundColor: Colors.background.primary,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: '#E1E4E8',
+    borderBottomColor: Colors.ui.border,
     alignItems: 'center',
   },
   title: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1D1D1F',
-    letterSpacing: 0.5,
+    ...TextStyles.h2,
+    color: Colors.text.primary,
   },
 });
