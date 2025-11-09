@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Linking, LayoutChangeEvent } from 'react-native';
 import YoutubePlayer, { YoutubeIframeRef } from 'react-native-youtube-iframe';
 import { Colors } from '../styles/colors';
 import { Spacing } from '../styles/spacing';
@@ -19,12 +19,16 @@ interface VideoPlayerProps {
   initialPosition?: number;
   /** Callback when video progress updates (every second) */
   onProgress?: (seconds: number) => void;
+  /** Callback with detected video duration (seconds) */
+  onDuration?: (seconds: number) => void;
   /** Callback when video completes */
   onComplete?: () => void;
   /** Playback speed (1, 1.25, 1.5, 2) */
   playbackRate?: number;
   /** Callback when playback rate changes */
   onPlaybackRateChange?: (rate: number) => void;
+  /** Callback when player encounters an error */
+  onError?: (errorType: string) => void;
 }
 
 const PLAYBACK_RATES = [1, 1.25, 1.5, 2];
@@ -54,18 +58,30 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   videoUrl,
   initialPosition = 0,
   onProgress,
+  onDuration,
   onComplete,
   playbackRate = 1,
   onPlaybackRateChange,
+  onError: onErrorCallback,
 }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSpeed, setCurrentSpeed] = useState(playbackRate);
   const playerRef = useRef<YoutubeIframeRef>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [playerDims, setPlayerDims] = useState({ width: 0, height: 0 });
 
   const videoId = extractVideoId(videoUrl);
+
+  // 🔍 DEBUG: Log video initialization
+  console.log('[VideoPlayer] 🎬 Initializing player with:', {
+    originalUrl: videoUrl,
+    extractedVideoId: videoId,
+    initialPosition,
+    playbackRate,
+  });
 
   /**
    * Start progress tracking interval
@@ -109,7 +125,30 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (initialPosition > 0 && playerRef.current) {
       playerRef.current.seekTo(initialPosition, true);
     }
+
+    // Try to read duration for offline progress computations
+    (async () => {
+      try {
+        const duration = await playerRef.current?.getDuration?.();
+        if (typeof duration === 'number' && duration > 0 && onDuration) {
+          onDuration(Math.floor(duration));
+        }
+      } catch (e) {
+        // Non-fatal
+      }
+    })();
   }, [initialPosition]);
+
+  /**
+   * Measure container to size the YouTube iframe exactly (prevents cropping)
+   */
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    const width = e.nativeEvent.layout.width;
+    const height = width * (9 / 16);
+    if (width !== playerDims.width || height !== playerDims.height) {
+      setPlayerDims({ width, height });
+    }
+  }, [playerDims.width, playerDims.height]);
 
   /**
    * Handle state change (playing, paused, ended)
@@ -149,10 +188,35 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
    * Handle player error
    */
   const handleError = useCallback((errorMsg: string) => {
-    console.error('[VideoPlayer] Error:', errorMsg);
-    setError('Failed to load video. Please try again.');
+    // 🔍 DEBUG: Enhanced error logging
+    console.error('[VideoPlayer] ❌ ERROR DETAILS:', {
+      errorType: errorMsg,
+      videoId,
+      videoUrl,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Check for common YouTube errors
+    let errorMessage = 'Failed to load video. Please try again.';
+
+    if (errorMsg === 'embed_not_allowed') {
+      errorMessage = 'This video cannot be embedded. Please watch it on YouTube.';
+      console.error('[VideoPlayer] 🚫 Embedding disabled for video:', videoId);
+    } else if (errorMsg === 'video_not_found') {
+      errorMessage = 'Video not found. It may have been removed.';
+    } else if (errorMsg === 'invalid_param') {
+      errorMessage = 'Invalid video ID. Please check the URL.';
+    }
+
+    setError(errorMessage);
+    setErrorType(errorMsg);
     setIsLoading(false);
-  }, []);
+
+    // Notify parent component
+    if (onErrorCallback) {
+      onErrorCallback(errorMsg);
+    }
+  }, [videoId, videoUrl, onErrorCallback]);
 
   /**
    * Toggle playback speed
@@ -175,8 +239,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
    */
   const handleRetry = useCallback(() => {
     setError(null);
+    setErrorType(null);
     setIsLoading(true);
   }, []);
+
+  /**
+   * Open video in YouTube app or browser
+   */
+  const handleOpenInYouTube = useCallback(async () => {
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    try {
+      const canOpen = await Linking.canOpenURL(youtubeUrl);
+      if (canOpen) {
+        await Linking.openURL(youtubeUrl);
+      } else {
+        console.error('[VideoPlayer] Cannot open YouTube URL');
+      }
+    } catch (err) {
+      console.error('[VideoPlayer] Failed to open YouTube:', err);
+    }
+  }, [videoId]);
 
   // Cleanup on unmount
   React.useEffect(() => {
@@ -186,7 +268,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [stopProgressTracking]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={handleLayout}>
       {/* Loading Spinner */}
       {isLoading && (
         <View style={styles.loadingContainer}>
@@ -199,9 +281,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
+          <View style={styles.errorButtons}>
+            {errorType === 'embed_not_allowed' ? (
+              <TouchableOpacity style={styles.youtubeButton} onPress={handleOpenInYouTube}>
+                <Text style={styles.youtubeButtonText}>Open in YouTube</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       )}
 
@@ -209,7 +299,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {!error && (
         <YoutubePlayer
           ref={playerRef}
-          height={300}
+          height={playerDims.height || 0}
+          width={playerDims.width || undefined}
           videoId={videoId}
           play={isPlaying}
           onReady={handleReady}
@@ -220,8 +311,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             controls: true,
             modestbranding: true,
             playbackRate: currentSpeed,
+            rel: 0, // Don't show related videos
+            showClosedCaptions: false,
+            loop: false,
+            playsinline: 1, // Important for iOS
           }}
           webViewStyle={styles.webView}
+          webViewProps={{
+            allowsInlineMediaPlayback: true,
+            mediaPlaybackRequiresUserAction: false,
+            javaScriptEnabled: true,
+            domStorageEnabled: true,
+            allowsFullscreenVideo: true,
+            scrollEnabled: false,
+            bounces: false,
+          }}
         />
       )}
 
@@ -283,6 +387,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: Spacing.md,
   },
+  errorButtons: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
   retryButton: {
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.sm,
@@ -290,6 +398,16 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.sm,
   },
   retryText: {
+    ...TextStyles.button,
+    color: Colors.white,
+  },
+  youtubeButton: {
+    backgroundColor: '#FF0000', // YouTube red
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: Spacing.sm,
+  },
+  youtubeButtonText: {
     ...TextStyles.button,
     color: Colors.white,
   },

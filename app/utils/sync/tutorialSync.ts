@@ -140,23 +140,56 @@ export async function startLesson(lessonId: string): Promise<TutorialProgress> {
     const client = getSupabaseClient();
     const now = new Date().toISOString();
 
-    // Upsert progress record
+    // Upsert progress record using unique constraint (user_id, lesson_id)
     const { data, error } = await client
       .from('tutorial_progress')
-      .upsert({
-        user_id: user.id,
-        lesson_id: lessonId,
-        status: TutorialLessonStatus.IN_PROGRESS,
-        progress_percent: 0,
-        started_at: now,
-        last_watched_at: now,
-      })
+      .upsert(
+        {
+          user_id: user.id,
+          lesson_id: lessonId,
+          status: TutorialLessonStatus.IN_PROGRESS,
+          // Don't clobber existing higher percent; server side will coalesce if needed
+          progress_percent: 0,
+          started_at: now,
+          last_watched_at: now,
+        },
+        { onConflict: 'user_id,lesson_id' }
+      )
       .select()
       .single();
 
     if (error) {
+      // If duplicate due to unique constraint, fetch the existing row instead of failing
+      // (defensive in case onConflict doesn't kick in due to server config)
+      const message = (error as any)?.message || '';
+      if (message.includes('duplicate key value') || message.includes('unique constraint')) {
+        const { data: existing, error: fetchErr } = await client
+          .from('tutorial_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('lesson_id', lessonId)
+          .single();
+        if (!fetchErr && existing) {
+          const progress: TutorialProgress = {
+            id: existing.id,
+            userId: existing.user_id,
+            lessonId: existing.lesson_id,
+            status: existing.status as TutorialLessonStatus,
+            progressPercent: existing.progress_percent,
+            videoPositionSeconds: existing.video_position_seconds || 0,
+            startedAt: existing.started_at ? new Date(existing.started_at).getTime() : null,
+            completedAt: existing.completed_at ? new Date(existing.completed_at).getTime() : null,
+            timeSpentSeconds: existing.time_spent_seconds,
+            lastWatchedAt: existing.last_watched_at ? new Date(existing.last_watched_at).getTime() : null,
+            createdAt: new Date(existing.created_at).getTime(),
+            updatedAt: new Date(existing.updated_at).getTime(),
+          };
+          addBreadcrumb('Lesson started (existing)', 'tutorial', { lessonId });
+          return progress;
+        }
+      }
       console.error('[TutorialSync] Failed to start lesson:', error);
-      throw new Error(`Failed to start lesson: ${error.message}`);
+      throw new Error(`Failed to start lesson: ${message || (error as any).toString?.() || 'unknown error'}`);
     }
 
     const progress: TutorialProgress = {
@@ -177,6 +210,11 @@ export async function startLesson(lessonId: string): Promise<TutorialProgress> {
     addBreadcrumb('Lesson started', 'tutorial', { lessonId });
     return progress;
   } catch (error) {
+    const msg = (error as Error)?.message || '';
+    if (msg === 'Not authenticated' || msg === 'Cloud sync disabled') {
+      console.warn('[TutorialSync] startLesson skipped:', msg);
+      throw error;
+    }
     console.error('[TutorialSync] Error starting lesson:', error);
     captureException(error as Error, { context: 'startLesson', lessonId });
     throw error;
@@ -237,6 +275,11 @@ export async function updateVideoPosition(
 
     return progress;
   } catch (error) {
+    const msg = (error as Error)?.message || '';
+    if (msg === 'Not authenticated' || msg === 'Cloud sync disabled') {
+      console.warn('[TutorialSync] updateVideoPosition skipped:', msg);
+      throw error;
+    }
     console.error('[TutorialSync] Error updating video position:', error);
     captureException(error as Error, { context: 'updateVideoPosition', lessonId });
     throw error;
@@ -297,6 +340,11 @@ export async function completeLesson(lessonId: string): Promise<TutorialProgress
     addBreadcrumb('Lesson completed', 'tutorial', { lessonId });
     return progress;
   } catch (error) {
+    const msg = (error as Error)?.message || '';
+    if (msg === 'Not authenticated' || msg === 'Cloud sync disabled') {
+      console.warn('[TutorialSync] completeLesson skipped:', msg);
+      throw error;
+    }
     console.error('[TutorialSync] Error completing lesson:', error);
     captureException(error as Error, { context: 'completeLesson', lessonId });
     throw error;

@@ -19,7 +19,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { useTutorialStore } from '../stores/tutorialStore';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { SuccessAnimation } from '../components/SuccessAnimation';
+import { AuthModal } from '../components/AuthModal';
+import SuccessAnimation from '../components/SuccessAnimation';
 import { Colors } from '../styles/colors';
 import { Spacing } from '../styles/spacing';
 import { TextStyles } from '../styles/typography';
@@ -33,8 +34,12 @@ export const TutorialScreen: React.FC<Props> = ({ route, navigation }) => {
     videoPosition,
     playbackRate,
     progress,
+    cloudEnabled,
+    isAuthed,
+    checkAuth,
     startLesson,
     updateVideoPosition,
+    setLessonDuration,
     setPlaybackRate,
     completeLesson,
     getLessonProgress,
@@ -43,15 +48,21 @@ export const TutorialScreen: React.FC<Props> = ({ route, navigation }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'transcript' | 'notes' | 'practice'>('transcript');
   const [isCompleting, setIsCompleting] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
 
   const lessonProgress = getLessonProgress(lessonId);
-  const progressPercent = lessonProgress?.progressPercent || 0;
+  // Compute session-based percent if no cloud progress
+  const computedPercent = currentLesson?.durationSeconds
+    ? Math.min(100, Math.floor((videoPosition / (currentLesson.durationSeconds || 1)) * 100))
+    : 0;
+  const progressPercent = Math.max(lessonProgress?.progressPercent ?? 0, computedPercent);
   const isCompleted = lessonProgress?.status === 'completed';
-  const canMarkComplete = progressPercent >= 80;
+  // Only allow completion when authenticated and >= 80%
+  const canMarkComplete = isAuthed && progressPercent >= 80;
 
-  // Load lesson on mount
+  // Load lesson on mount & check auth
   useEffect(() => {
-    startLesson(lessonId);
+    checkAuth().finally(() => startLesson(lessonId));
   }, [lessonId]);
 
   // Handle video completion
@@ -132,12 +143,25 @@ export const TutorialScreen: React.FC<Props> = ({ route, navigation }) => {
           </View>
         </View>
 
+        {/* Sign-in Banner when cloud is on but user not authed */}
+        {cloudEnabled && !isAuthed && (
+          <View style={styles.authBanner}>
+            <Text style={styles.authBannerText}>
+              Sign in to save progress and mark lessons complete.
+            </Text>
+            <TouchableOpacity style={styles.authButton} onPress={() => setShowAuth(true)}>
+              <Text style={styles.authButtonText}>Sign In</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Video Player */}
         <View style={styles.videoContainer}>
           <VideoPlayer
             videoUrl={currentLesson.videoUrl}
             initialPosition={videoPosition}
             onProgress={handleVideoProgress}
+            onDuration={(d) => setLessonDuration(lessonId, d)}
             onComplete={handleVideoComplete}
             playbackRate={playbackRate}
             onPlaybackRateChange={handlePlaybackRateChange}
@@ -229,10 +253,11 @@ export const TutorialScreen: React.FC<Props> = ({ route, navigation }) => {
 
         {/* Footer Actions */}
         <View style={styles.footer}>
-          {!isCompleted && progressPercent < 80 && (
-            <Text style={styles.footerHint}>
-              Watch at least 80% to mark as complete
-            </Text>
+          {!isCompleted && cloudEnabled && !isAuthed && (
+            <Text style={styles.footerHint}>Sign in to mark this lesson complete</Text>
+          )}
+          {!isCompleted && isAuthed && progressPercent < 80 && (
+            <Text style={styles.footerHint}>Watch at least 80% to mark as complete</Text>
           )}
 
           {!isCompleted && canMarkComplete && (
@@ -263,9 +288,15 @@ export const TutorialScreen: React.FC<Props> = ({ route, navigation }) => {
       {/* Success Animation */}
       {showSuccess && (
         <View style={styles.successOverlay}>
-          <SuccessAnimation onComplete={() => setShowSuccess(false)} />
+          <SuccessAnimation visible onComplete={() => setShowSuccess(false)} />
         </View>
       )}
+      {/* Inline Auth Modal */}
+      <AuthModal
+        visible={showAuth}
+        onClose={() => setShowAuth(false)}
+        onSuccess={() => setShowAuth(false)}
+      />
     </SafeAreaView>
   );
 };
@@ -320,7 +351,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   videoContainer: {
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.sm,
+    paddingBottom: 0,
   },
   tabBar: {
     flexDirection: 'row',
@@ -396,6 +429,28 @@ const styles = StyleSheet.create({
     ...TextStyles.caption,
     color: Colors.textSecondary,
     textAlign: 'center',
+  },
+  authBanner: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    backgroundColor: Colors.warning + '22',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  authBannerText: {
+    ...TextStyles.caption,
+    color: Colors.text,
+  },
+  authButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    borderRadius: Spacing.xs,
+  },
+  authButtonText: {
+    ...TextStyles.button,
+    color: Colors.white,
   },
   completeButton: {
     backgroundColor: Colors.success,

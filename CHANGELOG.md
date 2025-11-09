@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2025-11-09 – Tutorial Mode polish, online-first auth, and stability fixes
+- Video player sizing: measure container and set iframe width/height for exact 16:9 — fixes cropping on iPad/tablets (`app/components/VideoPlayer.tsx`).
+- Tutorial flow now online‑first: sync only when authenticated; clear banner CTA to sign in. Live progress updates during playback (`app/screens/TutorialScreen.tsx`, `app/stores/tutorialStore.ts`).
+- Inline Auth Modal: email/password Sign In + Sign Up, Forgot Password, Resend Confirmation, and Magic Link actions (`app/components/AuthModal.tsx`, `app/utils/sync/supabaseClient.ts`).
+- Settings UX: Move Cloud Sync (account) to top; show email and only relevant actions per auth state (`app/screens/SettingsScreen.tsx`).
+- Supabase tutorialSync: use `onConflict` upsert and fallback fetch to avoid duplicate-key errors on `startLesson` (`app/utils/sync/tutorialSync.ts`).
+- Live percent merge after position save; UI shows the max of session vs server percent (`app/stores/tutorialStore.ts`, `app/screens/TutorialScreen.tsx`).
+- SuccessAnimation import fix + explicit `visible` prop (prevents invalid element type warning) (`app/screens/TutorialScreen.tsx`).
+- Removed native random requirement causing RNGetRandomValues errors by replacing uuidv4 with JS-only IDs for the sync queue (`app/utils/id.ts`, `app/utils/sync/queue.ts`).
+- Misc: Added `VideoPlayerWebView` and `VideoPlayerHybrid` variants for fallback embedding (not default-wired yet).
+
 ### Added
 - Documentation and deployment preparation (PR11)
 

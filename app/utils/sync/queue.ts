@@ -13,7 +13,7 @@
  */
 
 import { MMKV } from 'react-native-mmkv';
-import { v4 as uuidv4 } from 'uuid';
+import { genId } from '../id';
 import { captureException, addBreadcrumb } from '../sentry';
 
 // Queue storage
@@ -114,7 +114,7 @@ interface QueueStats {
  */
 export function enqueue(type: QueueItemType, payload: any): string {
   try {
-    const id = uuidv4();
+    const id = genId('q_');
     const now = Date.now();
 
     const item: QueueItem = {

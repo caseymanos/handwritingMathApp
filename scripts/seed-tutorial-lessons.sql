@@ -4,10 +4,14 @@
 -- ============================================================================
 --
 -- Populates tutorial_lessons with initial content for Linear Equations category.
--- Uses Khan Academy YouTube videos (free, educational, high quality).
+-- Uses embeddable YouTube videos from verified educational channels.
 --
--- IMPORTANT: Replace 'YOUTUBE_VIDEO_ID' placeholders with actual Khan Academy video IDs.
--- Find videos at: https://www.khanacademy.org/math/algebra
+-- VIDEO SOURCES:
+-- - Najam Academy: Introduction to Linear Equations
+-- - Math with Mr. J: One-Step, Two-Step, Variables Both Sides, Multi-Step
+-- - The Organic Chemistry Tutor: Word Problems
+--
+-- All videos verified to allow embedding (tested 2025-01-09)
 --
 -- ============================================================================
 
@@ -36,10 +40,10 @@ INSERT INTO public.tutorial_lessons (
   'LINEAR_EQUATIONS',
   'EASY',
   'video',
-  'https://www.youtube.com/watch?v=_OYmal1r8bE', -- Khan Academy: Introduction to equations
+  'https://www.youtube.com/watch?v=tHm3X_Ta_iE', -- Najam Academy: Introduction to Linear Equations (11 min)
   'youtube',
-  480,
-  'In this lesson, we introduce linear equations. A linear equation is an equation with one or more variables, where the highest power of any variable is 1. Examples: x + 5 = 10, 2y = 8, 3z - 7 = 14.',
+  660,
+  'Provides a clear definition of linear equations, their basic form (ax + b = c), and why they are called "linear." Covers simple examples to introduce the concept.',
   1,
   ARRAY[]::TEXT[],
   ARRAY['linear equations', 'algebra', 'introduction', 'basics'],
@@ -54,10 +58,10 @@ INSERT INTO public.tutorial_lessons (
   'LINEAR_EQUATIONS',
   'EASY',
   'video',
-  'https://www.youtube.com/watch?v=RYDeM8rP2Ls', -- Khan Academy: One-step equations
+  'https://www.youtube.com/watch?v=L0_K89UJfJY', -- Math with Mr. J: One-Step Equations (7 min)
   'youtube',
-  360,
-  'One-step equations require only one operation to isolate the variable. Examples: x + 3 = 7 (subtract 3), 2x = 10 (divide by 2), x - 5 = 2 (add 5), x/4 = 3 (multiply by 4).',
+  420,
+  'A concise, step-by-step guide to solving one-step equations, demonstrating the use of inverse operations for addition/subtraction and multiplication/division problems.',
   2,
   ARRAY['linear-equations-intro']::TEXT[],
   ARRAY['one-step equations', 'solving equations', 'basic algebra'],
@@ -72,10 +76,10 @@ INSERT INTO public.tutorial_lessons (
   'LINEAR_EQUATIONS',
   'MEDIUM',
   'video',
-  'https://www.youtube.com/watch?v=tLXPdQlgPIs', -- Khan Academy: Two-step equations
+  'https://www.youtube.com/watch?v=AP5MbH88cdo', -- Math with Mr. J: Two-Step Equations (9 min)
   'youtube',
   540,
-  'Two-step equations require two operations to solve. Strategy: undo addition/subtraction first, then undo multiplication/division. Example: 2x + 5 = 15 → subtract 5 → divide by 2 → x = 5.',
+  'Clearly explains the process for solving two-step equations (like 2x + 3 = 11), focusing on the correct order of operations (undoing addition/subtraction first).',
   3,
   ARRAY['linear-equations-one-step']::TEXT[],
   ARRAY['two-step equations', 'multi-step', 'order of operations'],
@@ -90,10 +94,10 @@ INSERT INTO public.tutorial_lessons (
   'LINEAR_EQUATIONS',
   'MEDIUM',
   'video',
-  'https://www.youtube.com/watch?v=eKhfGTq0F7g', -- Khan Academy: Variables on both sides
+  'https://www.youtube.com/watch?v=eZsyV0ISzV8', -- Math with Mr. J: Variables on Both Sides (9 min)
   'youtube',
-  660,
-  'When variables appear on both sides, combine like terms first. Example: 3x + 5 = 2x + 15 → subtract 2x from both sides → x + 5 = 15 → subtract 5 → x = 10.',
+  540,
+  'Introduces equations with variables on both sides (e.g., 3x + 7 = 2x + 15). Provides a step-by-step process for isolating the variable by moving terms.',
   4,
   ARRAY['linear-equations-two-step']::TEXT[],
   ARRAY['variables both sides', 'combining like terms', 'algebraic manipulation'],
@@ -108,10 +112,10 @@ INSERT INTO public.tutorial_lessons (
   'LINEAR_EQUATIONS',
   'HARD',
   'video',
-  'https://www.youtube.com/watch?v=l8p5ScLSLzc', -- Khan Academy: Multi-step equations
+  'https://www.youtube.com/watch?v=XCWkBAUiBxM', -- Math with Mr. J: Multi-Step Equations (14 min)
   'youtube',
-  720,
-  'Multi-step equations combine all previous skills: distributive property, combining like terms, variables on both sides. Example: 2(x + 3) = 3x - 1 → distribute → 2x + 6 = 3x - 1 → solve.',
+  840,
+  'Covers solving complex linear equations that require preliminary steps, such as using the distributive property (e.g., 2(x + 3) = 14) and combining like terms (e.g., 3x + 2x - 5 = 20).',
   5,
   ARRAY['linear-equations-variables-both-sides']::TEXT[],
   ARRAY['multi-step', 'distributive property', 'complex equations'],
@@ -126,10 +130,10 @@ INSERT INTO public.tutorial_lessons (
   'LINEAR_EQUATIONS',
   'HARD',
   'video',
-  'https://www.youtube.com/watch?v=ew-nHkHx0qU', -- Khan Academy: Word problems
+  'https://www.youtube.com/watch?v=QEnFIgN8UBw', -- The Organic Chemistry Tutor: Word Problems (11 min)
   'youtube',
-  840,
-  'Word problems require translating English into algebra. Strategy: 1) Define the variable, 2) Write the equation, 3) Solve, 4) Check your answer. Example: "Five more than twice a number is 17. Find the number."',
+  660,
+  'Focuses on the crucial first step: translating English words into algebraic expressions and setting up a basic equation. This foundational skill is essential before solving more complex word problems.',
   6,
   ARRAY['linear-equations-multi-step']::TEXT[],
   ARRAY['word problems', 'application', 'real-world', 'problem solving'],

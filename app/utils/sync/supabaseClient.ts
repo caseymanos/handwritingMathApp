@@ -148,6 +148,100 @@ export async function signInWithMagicLink(email: string): Promise<{ error: Error
 }
 
 /**
+ * Sign in with email + password (demo/dev convenience)
+ */
+export async function signInWithPassword(
+  email: string,
+  password: string
+): Promise<{ error: Error | null }> {
+  try {
+    const client = getSupabaseClient();
+    const { error } = await client.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.error('[Supabase] Password sign-in error:', error);
+      return { error };
+    }
+    console.log('[Supabase] Signed in with password');
+    return { error: null };
+  } catch (error) {
+    console.error('[Supabase] Failed to sign in with password:', error);
+    return { error: error as Error };
+  }
+}
+
+/**
+ * Create an account with email + password
+ */
+export async function signUpWithPassword(
+  email: string,
+  password: string
+): Promise<{ error: Error | null; pendingEmailConfirmation?: boolean }> {
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client.auth.signUp({ email, password });
+    if (error) {
+      console.error('[Supabase] Sign up error:', error);
+      return { error };
+    }
+    console.log('[Supabase] Sign up success:', !!data.user);
+
+    // Some projects require email confirmation; session may be null.
+    if (!data.session) {
+      // Try to sign-in immediately in case auto-confirm is allowed
+      const { error: signinError } = await client.auth.signInWithPassword({ email, password });
+      if (signinError) {
+        console.warn('[Supabase] Post-signup sign-in pending confirmation');
+        return { error: null, pendingEmailConfirmation: true };
+      }
+    }
+    return { error: null, pendingEmailConfirmation: false };
+  } catch (error) {
+    console.error('[Supabase] Failed to sign up:', error);
+    return { error: error as Error };
+  }
+}
+
+/**
+ * Send password reset email
+ */
+export async function resetPassword(email: string): Promise<{ error: Error | null }> {
+  try {
+    const client = getSupabaseClient();
+    const redirectTo = process.env.SUPABASE_REDIRECT_URL || undefined;
+    const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      console.error('[Supabase] Reset password error:', error);
+      return { error };
+    }
+    console.log('[Supabase] Password reset email sent');
+    return { error: null };
+  } catch (error) {
+    console.error('[Supabase] Failed to send password reset:', error);
+    return { error: error as Error };
+  }
+}
+
+/**
+ * Resend confirmation email after signup
+ */
+export async function resendConfirmation(email: string): Promise<{ error: Error | null }> {
+  try {
+    const client = getSupabaseClient();
+    // Supabase v2: resend supports type 'signup'
+    const { error } = await client.auth.resend({ type: 'signup', email });
+    if (error) {
+      console.error('[Supabase] Resend confirmation error:', error);
+      return { error };
+    }
+    console.log('[Supabase] Confirmation email resent');
+    return { error: null };
+  } catch (error) {
+    console.error('[Supabase] Failed to resend confirmation:', error);
+    return { error: error as Error };
+  }
+}
+
+/**
  * Verify OTP from magic link email
  */
 export async function verifyOTP(email: string, token: string): Promise<{ error: Error | null }> {

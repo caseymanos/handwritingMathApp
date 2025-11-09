@@ -5,7 +5,7 @@
  * Allows clearing cache and viewing app version.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import type { SettingsScreenProps } from '../navigation/types';
 import { useProgressStore } from '../stores/progressStore';
+import { useTutorialStore } from '../stores/tutorialStore';
 import { storage } from '../utils/storage';
 
 // App version (should match package.json in production)
@@ -31,6 +32,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const totalAttempts = useProgressStore(state => state.attemptCount);
   const clearHistory = useProgressStore(state => state.clearHistory);
 
+  // Get tutorial store methods
+  const clearLessonsCache = useTutorialStore(state => state.clearLessonsCache);
+  const fetchLessons = useTutorialStore(state => state.fetchLessons);
+  const isAuthed = useTutorialStore(state => state.isAuthed);
+  const cloudEnabled = useTutorialStore(state => state.cloudEnabled);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Fetch user email when authed
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        if (isAuthed) {
+          const { getCurrentUser } = await import('../utils/sync/supabaseClient');
+          const user = await getCurrentUser();
+          if (!cancelled) setUserEmail(user?.email ?? null);
+        } else {
+          if (!cancelled) setUserEmail(null);
+        }
+      } catch {
+        if (!cancelled) setUserEmail(null);
+      }
+    };
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthed]);
+
   // Get device info
   const deviceInfo = {
     platform: Platform.OS,
@@ -42,19 +72,24 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const handleClearCache = () => {
     Alert.alert(
       'Clear Cache',
-      'This will clear all cached data but keep your progress history. Continue?',
+      'This will clear all cached data (including tutorial lessons) but keep your progress history. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Clear',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             try {
-              // Clear specific cache keys (but not progress data)
-              // This would clear validation cache, etc.
-              Alert.alert('Success', 'Cache cleared successfully');
+              // Clear tutorial lessons cache
+              clearLessonsCache();
+
+              // Fetch fresh lessons from Supabase
+              await fetchLessons();
+
+              Alert.alert('Success', 'Cache cleared successfully. Tutorial lessons refreshed from server.');
             } catch (error) {
-              Alert.alert('Error', 'Failed to clear cache');
+              console.error('Failed to clear cache:', error);
+              Alert.alert('Error', 'Failed to clear cache. Please try again.');
             }
           },
         },
@@ -111,6 +146,203 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
 
   return (
     <ScrollView style={styles.container}>
+      {/* Account (moved to the top) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Cloud Sync</Text>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Status</Text>
+          <Text style={styles.infoValue}>
+            {cloudEnabled ? (isAuthed ? 'Signed in' : 'Not signed in') : 'Cloud disabled'}
+          </Text>
+        </View>
+
+        {cloudEnabled && isAuthed && (
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Email</Text>
+            <Text style={styles.infoValue}>{userEmail || '—'}</Text>
+          </View>
+        )}
+
+        {cloudEnabled && !isAuthed && (
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => {
+            Alert.prompt(
+              'Sign In',
+              'Enter your email to receive a magic link:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Send Link',
+                  onPress: async (email) => {
+                    if (!email) return;
+                    try {
+                      const { signInWithMagicLink } = await import('../utils/sync/supabaseClient');
+                      const { error } = await signInWithMagicLink(email);
+                      if (error) {
+                        Alert.alert('Error', error.message);
+                      } else {
+                        Alert.alert('Success', 'Check your email for the magic link!');
+                      }
+                    } catch (error) {
+                      Alert.alert('Error', 'Failed to send magic link');
+                    }
+                  },
+                },
+              ],
+              'plain-text'
+            );
+          }}
+        >
+          <Text style={styles.buttonText}>Sign In with Email</Text>
+        </TouchableOpacity>
+        )}
+
+        {cloudEnabled && !isAuthed && (
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => {
+            // Prompt for email, then password
+            Alert.prompt(
+              'Sign In',
+              'Enter your email:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Next',
+                  onPress: (email) => {
+                    if (!email) return;
+                    Alert.prompt(
+                      'Password',
+                      'Enter your password:',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Sign In',
+                          onPress: async (password) => {
+                            if (!password) return;
+                            try {
+                              const { signInWithPassword } = await import('../utils/sync/supabaseClient');
+                              const { error } = await signInWithPassword(email, password);
+                              if (error) {
+                                Alert.alert('Error', error.message);
+                              } else {
+                                Alert.alert('Success', 'Signed in');
+                              }
+                            } catch {
+                              Alert.alert('Error', 'Failed to sign in');
+                            }
+                          },
+                        },
+                      ],
+                      'secure-text'
+                    );
+                  },
+                },
+              ],
+              'plain-text'
+            );
+          }}
+        >
+          <Text style={styles.buttonText}>Sign In with Password</Text>
+        </TouchableOpacity>
+        )}
+
+        {cloudEnabled && !isAuthed && (
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => {
+            // Prompt for email + password to create account
+            Alert.prompt(
+              'Create Account',
+              'Enter your email:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Next',
+                  onPress: (email) => {
+                    if (!email) return;
+                    Alert.prompt(
+                      'Password',
+                      'Choose a password:',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Create',
+                          onPress: async (password) => {
+                            if (!password) return;
+                            try {
+                              const { signUpWithPassword } = await import('../utils/sync/supabaseClient');
+                              const { error } = await signUpWithPassword(email, password);
+                              if (error) {
+                                Alert.alert('Error', error.message);
+                              } else {
+                                Alert.alert('Success', 'Account created. You are signed in.');
+                              }
+                            } catch {
+                              Alert.alert('Error', 'Failed to create account');
+                            }
+                          },
+                        },
+                      ],
+                      'secure-text'
+                    );
+                  },
+                },
+              ],
+              'plain-text'
+            );
+          }}
+        >
+          <Text style={styles.buttonText}>Create Account</Text>
+        </TouchableOpacity>
+        )}
+
+        {cloudEnabled && isAuthed && (
+        <TouchableOpacity
+          style={styles.button}
+          onPress={async () => {
+            try {
+              const { triggerManualSync } = await import('../utils/sync/hydrate');
+              Alert.alert('Syncing...', 'Please wait');
+              const result = await triggerManualSync();
+              if (result.success) {
+                Alert.alert('Success', 'Cloud sync completed');
+              } else {
+                Alert.alert('Error', result.error || 'Sync failed');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Sync failed');
+            }
+          }}
+        >
+          <Text style={styles.buttonText}>Manual Sync</Text>
+        </TouchableOpacity>
+        )}
+
+        {cloudEnabled && isAuthed && (
+        <TouchableOpacity
+          style={[styles.button, styles.dangerButton]}
+          onPress={async () => {
+            try {
+              const { signOut } = await import('../utils/sync/supabaseClient');
+              const { error } = await signOut();
+              if (error) {
+                Alert.alert('Error', error.message);
+              } else {
+                Alert.alert('Success', 'Signed out');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          }}
+        >
+          <Text style={[styles.buttonText, styles.dangerButtonText]}>Sign Out</Text>
+        </TouchableOpacity>
+        )}
+      </View>
+
       {/* App Info Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>App Information</Text>
@@ -151,88 +383,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           <Text style={styles.infoLabel}>Device Type</Text>
           <Text style={styles.infoValue}>{deviceInfo.isTablet ? 'Tablet' : 'Phone'}</Text>
         </View>
-      </View>
-
-      {/* Cloud Sync Section */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Cloud Sync</Text>
-
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Status</Text>
-          <Text style={styles.infoValue}>Not signed in</Text>
-        </View>
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => {
-            Alert.prompt(
-              'Sign In',
-              'Enter your email to receive a magic link:',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Send Link',
-                  onPress: async (email) => {
-                    if (!email) return;
-                    try {
-                      const { signInWithMagicLink } = await import('../utils/sync/supabaseClient');
-                      const { error } = await signInWithMagicLink(email);
-                      if (error) {
-                        Alert.alert('Error', error.message);
-                      } else {
-                        Alert.alert('Success', 'Check your email for the magic link!');
-                      }
-                    } catch (error) {
-                      Alert.alert('Error', 'Failed to send magic link');
-                    }
-                  },
-                },
-              ],
-              'plain-text'
-            );
-          }}
-        >
-          <Text style={styles.buttonText}>Sign In with Email</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.button}
-          onPress={async () => {
-            try {
-              const { triggerManualSync } = await import('../utils/sync/hydrate');
-              Alert.alert('Syncing...', 'Please wait');
-              const result = await triggerManualSync();
-              if (result.success) {
-                Alert.alert('Success', 'Cloud sync completed');
-              } else {
-                Alert.alert('Error', result.error || 'Sync failed');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Sync failed');
-            }
-          }}
-        >
-          <Text style={styles.buttonText}>Manual Sync</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.button, styles.dangerButton]}
-          onPress={async () => {
-            try {
-              const { signOut } = await import('../utils/sync/supabaseClient');
-              const { error } = await signOut();
-              if (error) {
-                Alert.alert('Error', error.message);
-              } else {
-                Alert.alert('Success', 'Signed out');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Failed to sign out');
-            }
-          }}
-        >
-          <Text style={[styles.buttonText, styles.dangerButtonText]}>Sign Out</Text>
-        </TouchableOpacity>
       </View>
 
       {/* API Status Section */}

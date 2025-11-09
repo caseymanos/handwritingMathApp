@@ -22,6 +22,7 @@ import {
 } from '../utils/sync/tutorialSync';
 import { Problem, ProblemCategory } from '../types/Problem';
 import { captureException, addBreadcrumb } from '../utils/sentry';
+import { isCloudSyncEnabled, isAuthenticated, onAuthStateChange } from '../utils/sync/supabaseClient';
 
 const STORAGE_KEY = 'tutorial_store';
 const LESSONS_CACHE_KEY = 'tutorial_lessons_cache';
@@ -47,10 +48,13 @@ interface TutorialStoreState {
   // Video position auto-save
   lastPositionSaveTime: number;
   positionSaveTimer: NodeJS.Timeout | null;
+  cloudEnabled: boolean;
+  isAuthed: boolean;
 
   // Actions
   fetchLessons: () => Promise<void>;
   fetchProgress: () => Promise<void>;
+  checkAuth: () => Promise<void>;
   startLesson: (lessonId: string) => Promise<void>;
   updateVideoPosition: (seconds: number) => void;
   setPlaybackRate: (rate: number) => void;
@@ -60,6 +64,8 @@ interface TutorialStoreState {
   getUnlockedProblems: (category: ProblemCategory, allProblems: Problem[]) => Problem[];
   getLessonProgress: (lessonId: string) => TutorialProgress | null;
   getCategoryProgress: (category: ProblemCategory) => { completed: number; total: number };
+  setLessonDuration: (lessonId: string, durationSeconds: number) => void;
+  clearLessonsCache: () => void;
   reset: () => void;
 }
 
@@ -146,6 +152,17 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
   playbackRate: 1,
   lastPositionSaveTime: 0,
   positionSaveTimer: null,
+  cloudEnabled: isCloudSyncEnabled(),
+  isAuthed: false,
+
+  /**
+   * Check cloud + auth state
+   */
+  checkAuth: async () => {
+    const cloud = isCloudSyncEnabled();
+    const authed = cloud ? await isAuthenticated() : false;
+    set({ cloudEnabled: cloud, isAuthed: authed });
+  },
 
   /**
    * Fetch all tutorial lessons from Supabase
@@ -189,6 +206,21 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
   },
 
   /**
+   * Update the known duration of a lesson (e.g., from the player) so offline progress can compute percent
+   */
+  setLessonDuration: (lessonId: string, durationSeconds: number) => {
+    const { lessons } = get();
+    const idx = lessons.findIndex((l) => l.id === lessonId);
+    if (idx === -1) return;
+    if (lessons[idx].durationSeconds === durationSeconds) return;
+
+    const updated = [...lessons];
+    updated[idx] = { ...updated[idx], durationSeconds } as TutorialLesson;
+    set({ lessons: updated });
+    cacheLessons(updated);
+  },
+
+  /**
    * Start a lesson (load current lesson and resume from saved position)
    */
   startLesson: async (lessonId: string) => {
@@ -210,8 +242,19 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
       isPlaying: false,
     });
 
+    // If cloud sync is disabled or user not authenticated, create/update local progress and return early
     try {
-      // Sync lesson start to Supabase
+      const cloud = isCloudSyncEnabled();
+      const authed = cloud ? await isAuthenticated() : false;
+      if (!cloud || !authed) {
+        // Online-first: if not authed, don't persist local progress; just note auth state
+        set({ cloudEnabled: cloud, isAuthed: authed });
+        addBreadcrumb('Lesson view (guest)', 'tutorial', { lessonId, resumePosition });
+        return;
+      }
+
+      // Cloud + authenticated: sync
+      // Sync lesson start to Supabase (if authenticated)
       lessonProgress = await syncStartLesson(lessonId);
       const newProgress = new Map(progress);
       newProgress.set(lessonId, lessonProgress);
@@ -220,8 +263,46 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
       saveProgress(newProgress);
       addBreadcrumb('Lesson started', 'tutorial', { lessonId, resumePosition });
     } catch (error) {
-      console.error('[TutorialStore] Failed to sync lesson start:', error);
-      captureException(error as Error, { context: 'TutorialStore.startLesson', lessonId });
+      // Don't throw if not authenticated - allow offline usage
+      console.warn('[TutorialStore] Failed to sync lesson start (continuing offline):', error);
+      // Only capture exception if it's not an auth error
+      if ((error as Error).message !== 'Not authenticated' && (error as Error).message !== 'Cloud sync disabled') {
+        captureException(error as Error, { context: 'TutorialStore.startLesson', lessonId });
+      }
+
+      // Ensure we have a local progress entry so UI can track offline
+      const newProgress = new Map(progress);
+      const now = Date.now();
+      const computedPercent = lesson.durationSeconds
+        ? Math.min(100, Math.floor((resumePosition / lesson.durationSeconds) * 100))
+        : 0;
+
+      const existing = newProgress.get(lessonId);
+      const localProgress = existing || {
+        id: `local-${lessonId}`,
+        userId: 'local',
+        lessonId,
+        status: TutorialLessonStatus.IN_PROGRESS,
+        progressPercent: computedPercent,
+        videoPositionSeconds: resumePosition,
+        startedAt: now,
+        completedAt: null,
+        timeSpentSeconds: 0,
+        lastWatchedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      } as TutorialProgress;
+
+      // Update mutable fields
+      localProgress.videoPositionSeconds = resumePosition;
+      localProgress.progressPercent = Math.max(localProgress.progressPercent || 0, computedPercent);
+      localProgress.status = TutorialLessonStatus.IN_PROGRESS;
+      localProgress.lastWatchedAt = now;
+      localProgress.updatedAt = now;
+
+      newProgress.set(lessonId, localProgress);
+      set({ progress: newProgress });
+      saveProgress(newProgress);
     }
   },
 
@@ -258,12 +339,30 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
    * Internal: Save video position immediately (called by debounce)
    */
   saveVideoPositionNow: async (lessonId: string, seconds: number) => {
-    const { progress } = get();
+    const { progress, lessons } = get();
 
     try {
+      const cloud = isCloudSyncEnabled();
+      const authed = cloud ? await isAuthenticated() : false;
+
+      if (!cloud || !authed) {
+        // Online-first: don't update persistent progress when not authed
+        set({ lastPositionSaveTime: Date.now(), cloudEnabled: cloud, isAuthed: authed });
+        return;
+      }
+
+      // Cloud + authenticated: sync
       const updatedProgress = await syncUpdateVideoPosition(lessonId, seconds);
       const newProgress = new Map(progress);
-      newProgress.set(lessonId, updatedProgress);
+
+      // Ensure in-memory percent reflects current session even if server doesn't compute it
+      const lesson = lessons.find((l) => l.id === lessonId);
+      const percent = lesson?.durationSeconds
+        ? Math.min(100, Math.floor((seconds / lesson.durationSeconds) * 100))
+        : updatedProgress.progressPercent;
+      const merged = { ...updatedProgress, progressPercent: Math.max(updatedProgress.progressPercent || 0, percent) };
+
+      newProgress.set(lessonId, merged);
 
       set({
         progress: newProgress,
@@ -272,8 +371,46 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
       saveProgress(newProgress);
       console.log('[TutorialStore] Video position saved:', seconds);
     } catch (error) {
-      console.error('[TutorialStore] Failed to save video position:', error);
-      captureException(error as Error, { context: 'TutorialStore.saveVideoPosition', lessonId });
+      // Don't throw if not authenticated - allow offline usage
+      console.warn('[TutorialStore] Failed to save video position (offline mode):', error);
+      // Only capture exception if it's not an auth error
+      if ((error as Error).message !== 'Not authenticated' && (error as Error).message !== 'Cloud sync disabled') {
+        captureException(error as Error, { context: 'TutorialStore.saveVideoPosition', lessonId });
+      }
+
+      // Update local progress so UI can reflect watch progress offline
+      const newProgress = new Map(progress);
+      const lesson = lessons.find((l) => l.id === lessonId);
+      const now = Date.now();
+      const percent = lesson?.durationSeconds
+        ? Math.min(100, Math.floor((seconds / lesson.durationSeconds) * 100))
+        : (newProgress.get(lessonId)?.progressPercent ?? 0);
+
+      const existing = newProgress.get(lessonId) as TutorialProgress | undefined;
+      const local: TutorialProgress = existing || {
+        id: `local-${lessonId}`,
+        userId: 'local',
+        lessonId,
+        status: TutorialLessonStatus.IN_PROGRESS,
+        progressPercent: percent,
+        videoPositionSeconds: seconds,
+        startedAt: now,
+        completedAt: null,
+        timeSpentSeconds: 0,
+        lastWatchedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      local.videoPositionSeconds = seconds;
+      local.progressPercent = Math.max(local.progressPercent || 0, percent);
+      local.status = local.progressPercent >= 100 ? TutorialLessonStatus.COMPLETED : TutorialLessonStatus.IN_PROGRESS;
+      local.lastWatchedAt = now;
+      local.updatedAt = now;
+
+      newProgress.set(lessonId, local);
+      set({ progress: newProgress, lastPositionSaveTime: now });
+      saveProgress(newProgress);
     }
   },
 
@@ -299,6 +436,16 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
     const { progress } = get();
 
     try {
+      const cloud = isCloudSyncEnabled();
+      const authed = cloud ? await isAuthenticated() : false;
+      if (!cloud || !authed) {
+        // Online-first: require auth to mark complete
+        set({ cloudEnabled: cloud, isAuthed: authed });
+        console.warn('[TutorialStore] Cannot complete lesson while not authenticated');
+        throw new Error('Authentication required');
+      }
+
+      // Cloud + authenticated: sync
       const updatedProgress = await syncCompleteLesson(lessonId);
       const newProgress = new Map(progress);
       newProgress.set(lessonId, updatedProgress);
@@ -308,6 +455,39 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
       addBreadcrumb('Lesson completed', 'tutorial', { lessonId });
       console.log('[TutorialStore] Lesson completed:', lessonId);
     } catch (error) {
+      // Offline fallback: mark locally as completed if not authenticated/cloud disabled
+      const message = (error as Error).message;
+      if (message === 'Not authenticated' || message === 'Cloud sync disabled') {
+        const newProgress = new Map(progress);
+        const now = Date.now();
+        const existing = newProgress.get(lessonId);
+        const local: TutorialProgress = existing || {
+          id: `local-${lessonId}`,
+          userId: 'local',
+          lessonId,
+          status: TutorialLessonStatus.COMPLETED,
+          progressPercent: 100,
+          videoPositionSeconds: existing?.videoPositionSeconds || 0,
+          startedAt: existing?.startedAt || now,
+          completedAt: now,
+          timeSpentSeconds: existing?.timeSpentSeconds || 0,
+          lastWatchedAt: now,
+          createdAt: existing?.createdAt || now,
+          updatedAt: now,
+        } as TutorialProgress;
+
+        local.status = TutorialLessonStatus.COMPLETED;
+        local.progressPercent = 100;
+        local.completedAt = now;
+        local.updatedAt = now;
+
+        newProgress.set(lessonId, local);
+        set({ progress: newProgress });
+        saveProgress(newProgress);
+        console.log('[TutorialStore] Lesson completed locally (offline):', lessonId);
+        return; // swallow error for offline success
+      }
+
       console.error('[TutorialStore] Failed to complete lesson:', error);
       captureException(error as Error, { context: 'TutorialStore.completeLesson', lessonId });
       throw error;
@@ -376,6 +556,19 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
   },
 
   /**
+   * Clear cached lessons to force refresh from Supabase
+   */
+  clearLessonsCache: () => {
+    try {
+      storage.delete(LESSONS_CACHE_KEY);
+      console.log('[TutorialStore] Lessons cache cleared');
+      set({ lessons: [] });
+    } catch (error) {
+      console.error('[TutorialStore] Failed to clear lessons cache:', error);
+    }
+  },
+
+  /**
    * Reset store (for testing or logout)
    */
   reset: () => {
@@ -407,3 +600,10 @@ export const useTutorialStore = create<TutorialStoreState>((set, get) => ({
 interface TutorialStoreState {
   saveVideoPositionNow: (lessonId: string, seconds: number) => Promise<void>;
 }
+
+// Keep auth state in sync with Supabase automatically
+try {
+  onAuthStateChange((_event, session) => {
+    useTutorialStore.setState({ isAuthed: !!session });
+  });
+} catch {}
