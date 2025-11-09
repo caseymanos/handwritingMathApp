@@ -60,12 +60,14 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
   const [showManualInput, setShowManualInput] = useState(false);
   const [currentEndpoint, setCurrentEndpoint] = useState<MyScriptEndpoint>('recognize');
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
-  const [autoValidationTimer, setAutoValidationTimer] = useState<NodeJS.Timeout | null>(null);
   const [stepResults, setStepResults] = useState<StepResult[]>([]); // Track all step results
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
+  // Use ref for timer to avoid stale closures and ensure proper cleanup
+  const autoValidationTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
   // Access canvas store for recognition state
-  const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes, clearRecognitionHistory, strokes } = useCanvasStore();
+  const { recognitionResult, recognitionStatus, setRecognitionResult, clearStrokes, clearRecognitionHistory, strokes, undoLastStroke, } = useCanvasStore();
 
   // Access validation store
   const {
@@ -86,6 +88,7 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
     shouldShowAutoHint,
     startInactivityTimer,
     stopInactivityTimer,
+    escalateHint,
   } = useHintStore();
 
   // Access progress store
@@ -133,6 +136,17 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       stopInactivityTimer();
       clearHint();
       resetIncorrectAttempts();
+
+      // Clear auto-validation timer to prevent stale validations
+      if (autoValidationTimerRef.current) {
+        clearTimeout(autoValidationTimerRef.current);
+        autoValidationTimerRef.current = null;
+        console.log('[TrainingModeScreen] Cleared auto-validation timer for new problem');
+      }
+
+      // Clear step results for new problem
+      setStepResults([]);
+      console.log('[TrainingModeScreen] Cleared step results for new problem');
     }
   }, [currentProblem, setValidationProblem, startAttempt, stopInactivityTimer, clearHint, resetIncorrectAttempts]);
 
@@ -215,9 +229,10 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
     if (unvalidatedStep) {
       console.log('[TrainingModeScreen] Manual check triggered for line:', unvalidatedStep.lineNumber);
       // Cancel auto-validation timer if it exists
-      if (autoValidationTimer) {
-        clearTimeout(autoValidationTimer);
-        setAutoValidationTimer(null);
+      if (autoValidationTimerRef.current) {
+        clearTimeout(autoValidationTimerRef.current);
+        autoValidationTimerRef.current = null;
+        console.log('[TrainingModeScreen] Cancelled auto-validation timer for manual check');
       }
       // Validate immediately
       handleValidateStep(unvalidatedStep.lineNumber, unvalidatedStep.latex);
@@ -257,17 +272,18 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       });
 
       // Clear any existing auto-validation timer
-      if (autoValidationTimer) {
-        clearTimeout(autoValidationTimer);
+      if (autoValidationTimerRef.current) {
+        clearTimeout(autoValidationTimerRef.current);
+        autoValidationTimerRef.current = null;
       }
 
-      // Start instant validation countdown (150ms - just enough to detect end of stroke)
-      const timer = setTimeout(() => {
+      // Start auto-validation countdown (500ms to ensure stroke detection is complete)
+      // Increased from 150ms to 500ms to avoid race conditions
+      autoValidationTimerRef.current = setTimeout(() => {
         console.log('[TrainingModeScreen] Auto-validation timer expired, validating step');
         handleValidateStep(displayLineNumber, latex);
-      }, 150);
-
-      setAutoValidationTimer(timer);
+        autoValidationTimerRef.current = null;
+      }, 500);
     }
   };
 
@@ -363,7 +379,7 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
               errorType,
               currentProblem.category,
               currentStepNumber,
-              recognitionResult.latex
+              recognitionResult?.latex
             );
           });
         }
@@ -400,19 +416,29 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
   };
 
   const handleClearCanvas = () => {
+    // Clear any pending auto-validation timer
+    if (autoValidationTimerRef.current) {
+      clearTimeout(autoValidationTimerRef.current);
+      autoValidationTimerRef.current = null;
+      console.log('[TrainingModeScreen] Cleared auto-validation timer on canvas clear');
+    }
+
     clearStrokes();
     clearRecognitionHistory(); // Clear recognition history to prevent memory growth
     setStrokeCount(0);
     setStepResults([]); // Clear all step results
-    console.log('Canvas cleared (including recognition history)');
+    console.log('[TrainingModeScreen] Canvas cleared (including recognition history and step results)');
   };
 
   const handleBackToHome = () => {
     // End current attempt as incomplete before navigating away
-    if (currentAttempt) {
-      endAttempt(false);
-      console.log('[TrainingModeScreen] Ended incomplete attempt, navigating to Home');
-    }
+    try {
+      const state = useProgressStore.getState?.();
+      if (state?.currentAttempt) {
+        state.endAttempt(false);
+      }
+    } catch {}
+    console.log('[TrainingModeScreen] Ended incomplete attempt, navigating to Home');
 
     // Clear recognition history before leaving to free memory
     clearRecognitionHistory();
@@ -421,25 +447,28 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
   };
 
   const handleNextProblem = () => {
-    if (currentProblem) {
-      // End current attempt as incomplete before loading next problem
-      if (currentAttempt) {
-        endAttempt(false);
-        console.log('[TrainingModeScreen] Ended incomplete attempt, moving to next problem');
-      }
+    if (!currentProblem) return;
 
-      const nextProblem = getNextProblem(currentProblem.id);
-      if (nextProblem) {
-        setCurrentProblem(nextProblem);
-        handleClearCanvas(); // Clear canvas for new problem
-        console.log('Next problem loaded:', nextProblem.id);
-      } else {
-        console.log('No more problems, looping back to first problem');
-        // Loop back to first easy problem
-        const firstProblem = getRandomProblem(ProblemDifficulty.EASY);
-        setCurrentProblem(firstProblem);
-        handleClearCanvas();
+    // End current attempt as incomplete before loading next problem
+    try {
+      const state = useProgressStore.getState?.();
+      if (state?.currentAttempt) {
+        state.endAttempt(false);
       }
+    } catch {}
+    console.log('[TrainingModeScreen] Ended incomplete attempt, moving to next problem');
+
+    const nextProblem = getNextProblem(currentProblem.id);
+    if (nextProblem) {
+      setCurrentProblem(nextProblem);
+      handleClearCanvas(); // Clear canvas for new problem
+      console.log('Next problem loaded:', nextProblem.id);
+    } else {
+      console.log('No more problems, looping back to first problem');
+      // Loop back to first easy problem
+      const firstProblem = getRandomProblem(ProblemDifficulty.EASY);
+      setCurrentProblem(firstProblem);
+      handleClearCanvas();
     }
   };
 
@@ -457,12 +486,16 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       return;
     }
 
-    console.log('[TrainingModeScreen] Manually requesting hint');
+    console.log('[TrainingModeScreen] Manually requesting hint (with escalation)');
 
     // Use the error type from the latest validation result
     const errorType = currentValidation.errorType as ValidationErrorType || ValidationErrorType.ARITHMETIC;
 
-    // Request hint from hint store
+    // FIRST: Escalate to the next hint level (concept → direction → micro)
+    escalateHint(errorType);
+    console.log('[TrainingModeScreen] Escalated hint level for error type:', errorType);
+
+    // THEN: Request hint from hint store with the new escalation level
     requestHint(
       errorType,
       currentProblem.category,
@@ -470,7 +503,7 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       recognitionResult?.latex
     );
 
-    console.log('[TrainingModeScreen] Hint requested for error type:', errorType);
+    console.log('[TrainingModeScreen] Hint requested at escalated level for error type:', errorType);
   };
 
   // Manual input is now triggered by user tapping the error message
@@ -479,16 +512,26 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
   // Cleanup: end incomplete attempt on component unmount
   useEffect(() => {
     return () => {
-      if (currentAttempt) {
-        console.log('[TrainingModeScreen] Component unmounting, ending incomplete attempt');
-        endAttempt(false);
+      // Read latest attempt state directly from store to avoid stale closure
+      try {
+        const state = useProgressStore.getState?.();
+        const attempt = state?.currentAttempt;
+        if (attempt) {
+          console.log('[TrainingModeScreen] Component unmounting, ending incomplete attempt');
+          state?.endAttempt(false);
+        }
+      } catch (e) {
+        // noop
       }
+
       // Clear auto-validation timer on unmount
-      if (autoValidationTimer) {
-        clearTimeout(autoValidationTimer);
+      if (autoValidationTimerRef.current) {
+        clearTimeout(autoValidationTimerRef.current);
+        autoValidationTimerRef.current = null;
+        console.log('[TrainingModeScreen] Cleared auto-validation timer on unmount');
       }
     };
-  }, [currentAttempt, endAttempt, autoValidationTimer]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -525,20 +568,7 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
           <Text style={styles.clearButtonText}>Clear Canvas</Text>
         </TouchableOpacity>
 
-        {/* Clear Cache button (DEV) */}
-        <TouchableOpacity
-          style={[styles.clearButton, { backgroundColor: '#FF9500' }]}
-          onPress={() => {
-            const { clearValidationCache } = require('../utils/storage');
-            clearValidationCache();
-            console.log('[TrainingModeScreen] Validation cache cleared');
-          }}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.clearButtonText}>Clear Cache</Text>
-        </TouchableOpacity>
-
-        {/* Manual Check button */}
+        {/* Manual Check button (replaces Clear Cache) */}
         <TouchableOpacity
           style={[styles.clearButton, { backgroundColor: '#34C759' }]}
           onPress={handleManualCheck}
@@ -546,6 +576,17 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
         >
           <Text style={styles.clearButtonText}>Check Now</Text>
         </TouchableOpacity>
+
+        {/* Show Toolbar button (only visible when toolbar is hidden) */}
+        {!isToolbarVisible && (
+          <TouchableOpacity
+            style={[styles.clearButton, { backgroundColor: '#5856D6' }]}
+            onPress={handleToggleToolbar}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.clearButtonText}>Show Toolbar</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
         {/* Problem Display - Between buttons and canvas */}
@@ -587,6 +628,14 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
           onClose={handleToggleToolbar}
           position={toolbarPosition}
           onPositionChange={handleToolbarPositionChange}
+          // Undo handlers
+          onUndoStroke={() => undoLastStroke()}
+          onUndoLine={() => {
+            // Use store's new undoLastLine action via getState to avoid stale closure
+            const store = useCanvasStore.getState();
+            (store as any).undoLastLine?.();
+          }}
+          canUndo={strokes.length > 0}
         />
       )}
 
@@ -654,6 +703,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 10,
+    pointerEvents: 'none', // Ensure touches go to canvas; UI is informational
   },
   controlsContainer: {
     position: 'absolute',

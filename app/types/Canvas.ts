@@ -88,18 +88,13 @@ export interface StylusCapabilities {
 }
 
 /**
- * Toolbar position on screen (9 snap positions)
+ * Toolbar position on screen (2 snap positions)
+ * MIDDLE_LEFT: Vertical toolbar on left side (rotated)
+ * BOTTOM_CENTER: Horizontal toolbar on bottom (not rotated)
  */
 export enum ToolbarPosition {
-  TOP_LEFT = 'top-left',
-  TOP_CENTER = 'top-center',
-  TOP_RIGHT = 'top-right',
   MIDDLE_LEFT = 'middle-left',
-  MIDDLE_CENTER = 'middle-center',
-  MIDDLE_RIGHT = 'middle-right',
-  BOTTOM_LEFT = 'bottom-left',
   BOTTOM_CENTER = 'bottom-center',
-  BOTTOM_RIGHT = 'bottom-right',
 }
 
 /**

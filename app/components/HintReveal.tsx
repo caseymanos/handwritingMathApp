@@ -16,6 +16,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Colors, Spacing, TextStyles, getHintLevelColor } from '../styles';
+import { InlineMath } from './InlineMath';
 
 interface HintRevealProps {
   /** Hint text to display */
@@ -152,7 +153,7 @@ const HintReveal: React.FC<HintRevealProps> = ({
           <Text style={styles.icon}>{icon}</Text>
           <Text style={[styles.label, { color: hintColor }]}>{label}</Text>
         </View>
-        <Text style={styles.hintText}>{hint}</Text>
+        <InlineMath text={hint} textStyle={styles.hintText} />
       </View>
     </Animated.View>
   );
@@ -165,8 +166,8 @@ const styles = StyleSheet.create({
   hintContainer: {
     borderLeftWidth: 4,
     borderRadius: Spacing.component.borderRadius,
-    padding: Spacing.md,
-    marginVertical: Spacing.sm,
+    padding: Spacing.sm,
+    marginVertical: Spacing.xs,
   },
   header: {
     flexDirection: 'row',

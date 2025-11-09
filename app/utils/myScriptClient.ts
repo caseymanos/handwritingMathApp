@@ -30,13 +30,15 @@ import {
   getPointerType,
 } from './myScriptUtils';
 
-// Debug: Check if env vars are loading
-console.log('Environment variable check:', {
-  MYSCRIPT_APPLICATION_KEY_type: typeof MYSCRIPT_APPLICATION_KEY,
-  MYSCRIPT_APPLICATION_KEY_value: MYSCRIPT_APPLICATION_KEY,
-  MYSCRIPT_HMAC_KEY_type: typeof MYSCRIPT_HMAC_KEY,
-  MYSCRIPT_HMAC_KEY_value: MYSCRIPT_HMAC_KEY,
-});
+// Debug (safe): show only presence of env vars in development
+if (__DEV__) {
+  // Do not print actual keys to logs
+  // eslint-disable-next-line no-console
+  console.log('MyScript env loaded:', {
+    hasAppKey: !!MYSCRIPT_APPLICATION_KEY,
+    hasHmacKey: !!MYSCRIPT_HMAC_KEY,
+  });
+}
 
 /**
  * Default MyScript API configuration
@@ -126,12 +128,19 @@ export class MyScriptClient {
       const endpoint = this.config.endpoint || 'batch';
       const path = `/${endpoint}`;
 
-      // Debug: Log request details
-      console.log('=== MyScript API Request Debug ===');
-      console.log('Endpoint:', endpoint, `(${this.config.apiUrl}${path})`);
-      console.log('Request body:', JSON.stringify(request, null, 2));
-      console.log('Configuration.math:', JSON.stringify(request.configuration?.math, null, 2));
-      console.log('==================================');
+      // Debug: Log request details (safe, minimal)
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.log('[MyScript] Request', {
+          endpoint,
+          url: `${this.config.apiUrl}${path}`,
+          strokeGroupCount: 'strokeGroups' in request ? request.strokeGroups.length : 1,
+          strokeCount:
+            'strokeGroups' in request
+              ? request.strokeGroups.reduce((n, g) => n + g.strokes.length, 0)
+              : request.strokes.length,
+        });
+      }
 
       // Prepare headers
       const headers: Record<string, string> = {
@@ -151,19 +160,15 @@ export class MyScriptClient {
         { headers }
       );
 
-      // Debug: Log API response structure
-      console.log('=== MyScript API Response Debug ===');
-      console.log('Response status:', response.status);
-      console.log('Response statusText:', response.statusText);
-      console.log('Response data type:', typeof response.data);
-      console.log('Response data keys:', Object.keys(response.data || {}));
-      console.log('Full response.data:', JSON.stringify(response.data, null, 2));
-      console.log('response.data.exports exists?', !!response.data?.exports);
-      if (response.data?.exports) {
-        console.log('response.data.exports length:', response.data.exports.length);
-        console.log('MIME types in exports:', response.data.exports.map((e: any) => e['mime-type']));
+      // Debug: Log API response structure (safe, minimal)
+      if (__DEV__) {
+        // eslint-disable-next-line no-console
+        console.log('[MyScript] Response', {
+          status: response.status,
+          statusText: response.statusText,
+          keys: Object.keys(response.data || {}),
+        });
       }
-      console.log('=================================');
 
       // Parse response
       const latex = extractLatex(response.data);
@@ -232,9 +237,18 @@ export class MyScriptClient {
 
       // Network error
       if (!axiosError.response) {
+        console.warn('=== MyScript Network Error Debug ===');
+        console.warn('Error message:', axiosError.message);
+        console.warn('Error code:', axiosError.code);
+        console.warn('Request URL:', axiosError.config?.url);
+        console.warn('Base URL:', axiosError.config?.baseURL);
+        console.warn('Full URL:', `${axiosError.config?.baseURL}${axiosError.config?.url}`);
+        console.warn('Error details:', JSON.stringify(axiosError, null, 2));
+        console.warn('===================================');
+
         return {
           type: RecognitionErrorType.NETWORK_ERROR,
-          message: 'Network error: Unable to reach MyScript API',
+          message: `Network error: ${axiosError.message} (${axiosError.code || 'UNKNOWN'})`,
           originalError: error,
           timestamp,
         };
@@ -362,12 +376,13 @@ export function createMyScriptClientFromEnv(): MyScriptClient {
   const applicationKey = MYSCRIPT_APPLICATION_KEY || '';
   const hmacKey = MYSCRIPT_HMAC_KEY;
 
-  console.log('MyScript Config:', {
-    hasApplicationKey: !!applicationKey,
-    applicationKeyLength: applicationKey?.length,
-    applicationKeyPreview: applicationKey?.substring(0, 8) + '...',
-    hasHmacKey: !!hmacKey,
-  });
+  if (__DEV__) {
+    // eslint-disable-next-line no-console
+    console.log('MyScript Config (safe):', {
+      hasApplicationKey: !!applicationKey,
+      hasHmacKey: !!hmacKey,
+    });
+  }
 
   if (!applicationKey) {
     throw new Error(

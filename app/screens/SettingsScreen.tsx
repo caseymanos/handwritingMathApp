@@ -153,6 +153,88 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         </View>
       </View>
 
+      {/* Cloud Sync Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Cloud Sync</Text>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Status</Text>
+          <Text style={styles.infoValue}>Not signed in</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => {
+            Alert.prompt(
+              'Sign In',
+              'Enter your email to receive a magic link:',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Send Link',
+                  onPress: async (email) => {
+                    if (!email) return;
+                    try {
+                      const { signInWithMagicLink } = await import('../utils/sync/supabaseClient');
+                      const { error } = await signInWithMagicLink(email);
+                      if (error) {
+                        Alert.alert('Error', error.message);
+                      } else {
+                        Alert.alert('Success', 'Check your email for the magic link!');
+                      }
+                    } catch (error) {
+                      Alert.alert('Error', 'Failed to send magic link');
+                    }
+                  },
+                },
+              ],
+              'plain-text'
+            );
+          }}
+        >
+          <Text style={styles.buttonText}>Sign In with Email</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.button}
+          onPress={async () => {
+            try {
+              const { triggerManualSync } = await import('../utils/sync/hydrate');
+              Alert.alert('Syncing...', 'Please wait');
+              const result = await triggerManualSync();
+              if (result.success) {
+                Alert.alert('Success', 'Cloud sync completed');
+              } else {
+                Alert.alert('Error', result.error || 'Sync failed');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Sync failed');
+            }
+          }}
+        >
+          <Text style={styles.buttonText}>Manual Sync</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.dangerButton]}
+          onPress={async () => {
+            try {
+              const { signOut } = await import('../utils/sync/supabaseClient');
+              const { error } = await signOut();
+              if (error) {
+                Alert.alert('Error', error.message);
+              } else {
+                Alert.alert('Success', 'Signed out');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          }}
+        >
+          <Text style={[styles.buttonText, styles.dangerButtonText]}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* API Status Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>API Status</Text>

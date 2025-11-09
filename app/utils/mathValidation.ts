@@ -47,14 +47,26 @@ function generateValidationId(): string {
 
 /**
  * Normalize LaTeX expressions for comparison
- * Removes whitespace, normalizes fractions, etc.
+ * Removes whitespace and standardizes notation while preserving mathematical meaning
+ *
+ * Fixed: Now more conservative - only removes decorative elements, not structural ones
  */
 function normalizeLaTeX(latex: string): string {
   return latex
     .replace(/\s+/g, '') // Remove all whitespace
-    .replace(/\\left/g, '') // Remove \left
-    .replace(/\\right/g, '') // Remove \right
+    .replace(/\\left/g, '') // Remove \left (decorative)
+    .replace(/\\right/g, '') // Remove \right (decorative)
     .replace(/\\\s+/g, '\\') // Normalize backslashes
+    // DO NOT remove multiplication signs - they are meaningful
+    // DO NOT remove parentheses - they affect order of operations
+    // Only normalize implicit multiplication: "2x" and "2*x" should match
+    .replace(/([0-9])\\cdot([a-zA-Z])/g, '$1$2') // 2\cdot x -> 2x
+    .replace(/([0-9])\*([a-zA-Z])/g, '$1$2') // 2*x -> 2x
+    .replace(/([0-9])\\times([a-zA-Z])/g, '$1$2') // 2\times x -> 2x
+    // Normalize division to fraction slash
+    .replace(/\\div/g, '/') // \div -> /
+    // Normalize equals with extra spacing
+    .replace(/=/g, '=') // Already normalized, but explicit
     .toLowerCase()
     .trim();
 }
@@ -76,9 +88,9 @@ function findMatchingExpectedStep(
     return currentExpected;
   }
 
-  // Check if it matches any nearby steps (within 2 steps)
+  // Check if it matches any nearby steps (within 5 steps to allow skipping intermediate work)
   const nearbySteps = expectedSteps.filter(
-    s => Math.abs(s.stepNumber - currentStepNumber) <= 2
+    s => Math.abs(s.stepNumber - currentStepNumber) <= 5
   );
 
   for (const step of nearbySteps) {
@@ -235,6 +247,7 @@ function parseCameraMathResponse(
   let suggestedSteps: string[] = [];
   let expectedNext: string | undefined;
   let confidence: number | undefined;
+  let isFinalAnswerFlag = false;
 
   // Parse UpStudy API response
   if (apiResponse.success && apiResponse.data) {
@@ -276,40 +289,60 @@ function parseCameraMathResponse(
     }
   }
 
-  // If API failed or no match found, use local validation
-  if (!apiResponse.success || !isCorrect) {
-    console.log('[Validation] Using local validation against expected steps');
+  // Always check local validation as well (even if API said correct)
+  // This allows us to be more lenient than the API
+  console.log('[Validation] Checking local validation against expected steps');
 
-    const matchingStep = findMatchingExpectedStep(
+  const matchingStep = findMatchingExpectedStep(
+    request.studentStep,
+    problem.expectedSteps,
+    request.stepNumber
+  );
+
+  // If API said incorrect but local validation finds a match, trust local validation
+  if (matchingStep !== null && !isCorrect) {
+    console.log('[Validation] Local validation overriding API: step is correct');
+    isCorrect = true;
+    isUseful = isStepUseful(
       request.studentStep,
-      problem.expectedSteps,
-      request.stepNumber
+      request.previousSteps?.[request.previousSteps.length - 1],
+      matchingStep
     );
-
-    isCorrect = matchingStep !== null;
-    // Only evaluate usefulness if the step is correct
-    // Incorrect steps are never useful by definition
+    feedback = 'Great! This step is correct and advances your solution.';
+    confidence = 0.90;
+  } else if (matchingStep !== null) {
+    // API agreed it was correct
+    isCorrect = true;
     isUseful = isCorrect && isStepUseful(
       request.studentStep,
       request.previousSteps?.[request.previousSteps.length - 1],
       matchingStep
     );
+  }
 
-    if (!isCorrect) {
-      errorType = classifyError(request.studentStep, problem.expectedSteps, request.stepNumber);
+  if (!isCorrect) {
+    errorType = classifyError(request.studentStep, problem.expectedSteps, request.stepNumber);
+  }
+
+  feedback = generateFeedback(isCorrect, isUseful, errorType, matchingStep || undefined);
+
+  // Provide expected next step if available
+  const nextExpectedStep = problem.expectedSteps.find(
+    s => s.stepNumber === request.stepNumber
+  );
+  if (nextExpectedStep) {
+    expectedNext = nextExpectedStep.expression;
+  }
+
+  confidence = 0.85; // Local validation confidence
+
+  // Check if this is the final answer
+  if (isCorrect) {
+    isFinalAnswerFlag = isFinalAnswer(request.studentStep, problem);
+    if (isFinalAnswerFlag) {
+      console.log('[Validation] Student reached final answer!');
+      feedback = 'Perfect! You solved it correctly!';
     }
-
-    feedback = generateFeedback(isCorrect, isUseful, errorType, matchingStep || undefined);
-
-    // Provide expected next step if available
-    const nextExpectedStep = problem.expectedSteps.find(
-      s => s.stepNumber === request.stepNumber
-    );
-    if (nextExpectedStep) {
-      expectedNext = nextExpectedStep.expression;
-    }
-
-    confidence = 0.85; // Local validation confidence
   }
 
   return {
@@ -321,6 +354,7 @@ function parseCameraMathResponse(
     expectedNext,
     confidence,
     apiResponse,
+    isFinalAnswer: isFinalAnswerFlag,
   };
 }
 
@@ -343,7 +377,9 @@ async function callCameraMathAPI(
       lang: 'EN',
     };
 
-    console.log('[Validation] Calling UpStudy API (show-steps):', endpoint);
+    if (__DEV__) {
+      console.log('[Validation] Calling UpStudy API (show-steps):', endpoint);
+    }
     console.log('[Validation] Request payload:', JSON.stringify(payload, null, 2));
 
     // Make request with retry logic
@@ -376,7 +412,9 @@ async function callCameraMathAPI(
       }
     });
 
-    console.log('[Validation] UpStudy API response:', JSON.stringify(response, null, 2));
+    if (__DEV__) {
+      console.log('[Validation] UpStudy API response:', JSON.stringify(response, null, 2));
+    }
 
     // UpStudy response format: { "data": {...}, "err_msg": null }
     if (response.err_msg) {

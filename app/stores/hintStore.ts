@@ -165,6 +165,23 @@ export const useHintStore = create<HintStore>((set, get) => ({
       autoTriggered: false, // Set by caller if needed
     };
 
+    // Cloud sync: upsert hint to cloud
+    import('../utils/sync/syncClient').then(({ upsertHint }) => {
+      // Get current attempt ID from progressStore
+      import('./progressStore').then(({ useProgressStore }) => {
+        const attemptId = useProgressStore.getState().currentAttempt?.id;
+        if (attemptId) {
+          upsertHint(historyEntry, attemptId).catch((error) => {
+            console.error('[HintStore] Failed to sync hint:', error);
+          });
+        }
+      }).catch(() => {
+        // Progress store not available
+      });
+    }).catch(() => {
+      // Sync module not available, skip
+    });
+
     // Update state
     set({
       currentHint: selectedHint,

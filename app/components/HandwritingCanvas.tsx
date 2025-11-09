@@ -5,20 +5,13 @@
  * Uses Skia for GPU-accelerated rendering (120 FPS capable).
  */
 
-import React, { useCallback, useMemo, useReducer, useRef } from 'react';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import {
-  Canvas,
-  Path,
-  Skia,
-  Group,
-  Line,
-  vec,
-} from '@shopify/react-native-skia';
+import React, { useCallback, useMemo, useReducer, useRef, useState, useEffect } from 'react';
+import { useIsFocused } from '@react-navigation/native';
+import { StyleSheet, View, useWindowDimensions, AppState } from 'react-native';
+import { Canvas, Path, Skia, Group, Line, vec } from '@shopify/react-native-skia';
 import {
   Gesture,
   GestureDetector,
-  GestureHandlerRootView,
 } from 'react-native-gesture-handler';
 import {
   Stroke,
@@ -33,9 +26,10 @@ import { useCanvasStore } from '../stores/canvasStore';
 import { useRecognition } from '../hooks/useRecognition';
 import { Colors } from '../styles';
 
-// Line guide configuration
+// Line guide configuration (must stay in sync with lineDetectionUtils)
 const LINE_GUIDE_SPACING = 60; // pixels between horizontal guides
-const LINE_GUIDE_COLOR = Colors.ui.border;
+const TOP_OFFSET = 150; // space at top for problem header
+const LINE_GUIDE_COLOR = '#999999'; // Medium gray for better visibility
 
 interface HandwritingCanvasProps {
   selectedColor?: CanvasColor;
@@ -78,15 +72,40 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
 
   const { processTouchEvent } = useStylus();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const [canvasKey, setCanvasKey] = useState(0);
+  const isFocused = useIsFocused?.() ?? true;
+
+  // Force remount of Skia Canvas when app returns to foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setCanvasKey((k) => k + 1);
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
+  // Also bump key when screen regains focus (e.g., after redbox or nav)
+  useEffect(() => {
+    if (isFocused) {
+      setCanvasKey((k) => k + 1);
+    }
+  }, [isFocused]);
+
+  // Debug: Log canvas dimensions
+  console.log('[HandwritingCanvas] Canvas dimensions:', screenWidth, 'x', screenHeight);
+  console.log('[HandwritingCanvas] Number of strokes:', strokes.length);
+  console.log('[HandwritingCanvas] Show line guides:', showLineGuides);
 
   // Generate line guides for the canvas (dynamic based on screen height)
   const lineGuides = useMemo(() => {
     if (!showLineGuides) return [];
 
     const guides = [];
-    for (let y = LINE_GUIDE_SPACING; y < screenHeight; y += LINE_GUIDE_SPACING) {
+    for (let y = TOP_OFFSET; y < screenHeight; y += LINE_GUIDE_SPACING) {
       guides.push(y);
     }
+    console.log('[HandwritingCanvas] Generated', guides.length, 'line guides');
     return guides;
   }, [showLineGuides, screenHeight]);
 
@@ -116,9 +135,11 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
         id: `stroke-${Date.now()}-${Math.random()}`,
         points: [point],
         color: selectedTool === DrawingTool.ERASER ? '#FFFFFF' : selectedColor,
-        strokeWidth,
+        strokeWidth: Math.max(strokeWidth, 5), // Force minimum 5px width
         timestamp: Date.now(),
       };
+
+      console.log('[HandwritingCanvas] Starting new stroke:', newStroke.id, 'color:', newStroke.color, 'width:', newStroke.strokeWidth);
 
       // Store in local ref instead of Zustand state
       currentStrokeRef.current = newStroke;
@@ -168,8 +189,11 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
     const completedStroke = currentStrokeRef.current;
     if (!completedStroke) return;
 
+    console.log('[HandwritingCanvas] Completing stroke:', completedStroke.id, 'points:', completedStroke.points.length, 'color:', completedStroke.color);
+
     // Add completed stroke to Zustand store (only happens once per stroke)
     addStroke(completedStroke);
+    console.log('[HandwritingCanvas] Stroke added to store, total strokes now:', strokes.length + 1);
     setCurrentStroke(null);
 
     // Clear local ref
@@ -236,10 +260,11 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
   }, []);
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.canvasContainer}>
         <GestureDetector gesture={panGesture}>
-          <Canvas style={styles.canvas}>
+          <View style={styles.gestureArea} collapsable={false}>
+            <Canvas key={canvasKey} style={[styles.canvas, { width: screenWidth, height: screenHeight }]}>
             {/* Line guides */}
             {showLineGuides &&
               lineGuides.map((y, index) => (
@@ -250,6 +275,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
                   color={LINE_GUIDE_COLOR}
                   style="stroke"
                   strokeWidth={2}
+                  opacity={0.9}
                 />
               ))}
 
@@ -265,9 +291,10 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
                     path={path}
                     color={stroke.color}
                     style="stroke"
-                    strokeWidth={stroke.strokeWidth}
+                    strokeWidth={Math.max(stroke.strokeWidth, 3)}
                     strokeCap="round"
                     strokeJoin="round"
+                    opacity={1}
                   />
                 );
               })}
@@ -286,13 +313,15 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
                   path={path}
                   color={stroke.color}
                   style="stroke"
-                  strokeWidth={stroke.strokeWidth}
+                  strokeWidth={Math.max(stroke.strokeWidth, 3)}
                   strokeCap="round"
                   strokeJoin="round"
+                  opacity={1}
                 />
               );
             })()}
-          </Canvas>
+            </Canvas>
+          </View>
         </GestureDetector>
 
         {/* Accessibility label for canvas */}
@@ -302,7 +331,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
           accessibilityRole="none"
         />
       </View>
-    </GestureHandlerRootView>
+    </View>
   );
 };
 
@@ -312,9 +341,14 @@ const styles = StyleSheet.create({
   },
   canvasContainer: {
     flex: 1,
-    backgroundColor: Colors.background.canvas,
+    position: 'relative',
+    backgroundColor: '#FFFFFF', // Force white background
+  },
+  gestureArea: {
+    flex: 1,
   },
   canvas: {
-    flex: 1,
+    backgroundColor: '#FFFFFF', // Force white background on canvas too
+    zIndex: 0,
   },
 });

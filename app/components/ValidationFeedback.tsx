@@ -22,6 +22,8 @@ import { getHintLevelDisplayText, getHintLevelIcon } from '../utils/hintUtils';
 import { Colors, Spacing, TextStyles, Shadows, getValidationColor } from '../styles';
 import FeedbackAnimation from './FeedbackAnimation';
 import HintReveal from './HintReveal';
+import { useUIStore } from '../stores/uiStore';
+// (Swipe-to-collapse removed for stability; will revisit once canvas is fully stable)
 
 /**
  * Props for ValidationFeedback
@@ -42,12 +44,14 @@ interface ValidationFeedbackProps {
  *
  * Displays validation results at the bottom of the screen
  */
-export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
+export const ValidationFeedback: React.FC<ValidationFeedbackProps> = React.memo(({
   bottom = 120,
   showConfidence = false,
   showSuggestedSteps = true,
   onRequestHint,
 }) => {
+  const collapsed = useUIStore(state => state.hintCollapsed);
+  const setCollapsed = useUIStore(state => state.setHintCollapsed);
   // Select individual properties to avoid re-render issues
   const status = useValidationStore(state => state.status);
   const currentValidation = useValidationStore(state => state.currentValidation);
@@ -220,10 +224,6 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
               </View>
             )}
 
-          {/* Cached indicator */}
-          {currentValidation.cachedResult && (
-            <Text style={styles.cachedText}>📦 Cached result</Text>
-          )}
 
           {/* Hint display with HintReveal component */}
           {currentHint && (
@@ -255,8 +255,10 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
 
   return (
     <Animated.View
+      pointerEvents="box-none"
       style={[
         styles.container,
+        collapsed ? styles.collapsedContainer : styles.expandedContainer,
         {
           backgroundColor: getBackgroundColor(),
           bottom,
@@ -265,20 +267,69 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = ({
         },
       ]}
     >
-      {renderContent()}
+      <View pointerEvents="auto" style={styles.innerContent}>
+        {/* Collapsed state: single large tap target */}
+        {collapsed ? (
+          <TouchableOpacity
+            style={styles.collapsedTapTarget}
+            onPress={() => setCollapsed(false)}
+            accessibilityLabel="Expand hint panel"
+            activeOpacity={0.8}
+          >
+            <Text style={styles.collapsedIcon}>∑</Text>
+            <Text style={styles.collapsedLabel}>Hints</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+          {/* Collapse toggle shown only when expanded */}
+          <TouchableOpacity
+            style={styles.collapseToggle}
+            onPress={() => setCollapsed(true)}
+            accessibilityLabel="Collapse hint panel"
+            activeOpacity={0.8}
+          >
+            <Text style={styles.collapseIcon}>‹</Text>
+          </TouchableOpacity>
+          <ScrollView
+            style={styles.scrollContainer}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            {renderContent()}
+          </ScrollView>
+          </>
+        )}
+      </View>
     </Animated.View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
+    borderRadius: Spacing.component.borderRadiusLarge,
+    ...Shadows.large,
+    maxHeight: 400,
+  },
+  expandedContainer: {
     left: Spacing.lg,
     right: Spacing.lg,
-    borderRadius: Spacing.component.borderRadiusLarge,
+  },
+  collapsedContainer: {
+    left: Spacing.lg,
+    width: 120, // wider with label
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  innerContent: {
+    width: '100%',
+  },
+  scrollContainer: {
+    maxHeight: 400,
+  },
+  scrollContent: {
     padding: Spacing.md,
-    ...Shadows.large,
-    maxHeight: 250,
   },
   contentRow: {
     flexDirection: 'row',
@@ -361,5 +412,47 @@ const styles = StyleSheet.create({
   hintButtonText: {
     ...TextStyles.buttonMedium,
     color: Colors.primary.contrast,
+  },
+  collapseToggle: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    zIndex: 2,
+  },
+  collapseIcon: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: '600',
+    marginTop: -1,
+  },
+  collapsedTapTarget: {
+    width: '100%',
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderRadius: Spacing.component.borderRadiusLarge,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  collapsedIcon: {
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  collapsedLabel: {
+    ...TextStyles.labelMedium,
+    color: '#fff',
+    fontWeight: '700',
   },
 });

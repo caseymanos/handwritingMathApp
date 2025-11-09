@@ -148,6 +148,7 @@ export const useProgressStore = create<ProgressStoreState>((set, get) => ({
   startAttempt: (problemId: string) => {
     const attemptId = generateAttemptId();
     const startTime = Date.now();
+    const sessionId = get().currentSessionId;
 
     const newAttempt: Attempt = {
       id: attemptId,
@@ -166,9 +167,30 @@ export const useProgressStore = create<ProgressStoreState>((set, get) => ({
         osVersion: Platform.Version.toString(),
       },
       metadata: {
-        sessionId: get().currentSessionId,
+        sessionId,
       },
     };
+
+    // Cloud sync: upsert session (once per session)
+    import('../utils/sync/syncClient').then(async ({ upsertSession, upsertAttempt }) => {
+      try {
+        // Sync session (idempotent, only once per session ID)
+        await upsertSession({
+          id: sessionId,
+          userId: '', // Will be set by syncClient from auth
+          startedAt: get().sessionStartTime,
+          deviceInfo: newAttempt.deviceInfo!,
+          appVersion: '1.0.0',
+        });
+
+        // Sync new attempt
+        await upsertAttempt(newAttempt);
+      } catch (error) {
+        console.error('[ProgressStore] Failed to sync session/attempt:', error);
+      }
+    }).catch(() => {
+      // Sync module not available, skip
+    });
 
     set({
       currentAttempt: newAttempt,
@@ -197,6 +219,15 @@ export const useProgressStore = create<ProgressStoreState>((set, get) => ({
       solved,
       totalTime,
     };
+
+    // Cloud sync: upsert completed attempt
+    import('../utils/sync/syncClient').then(({ upsertAttempt }) => {
+      upsertAttempt(completedAttempt).catch((error) => {
+        console.error('[ProgressStore] Failed to sync completed attempt:', error);
+      });
+    }).catch(() => {
+      // Sync module not available, skip
+    });
 
     // Add to attempts history
     const updatedAttempts = [...state.attempts, completedAttempt];
@@ -260,6 +291,15 @@ export const useProgressStore = create<ProgressStoreState>((set, get) => ({
       ...currentAttempt,
       steps: [...currentAttempt.steps, step],
     };
+
+    // Cloud sync: upsert step and enqueue stroke uploads
+    import('../utils/sync/syncClient').then(({ upsertStep }) => {
+      upsertStep(step, currentAttempt.id).catch((error) => {
+        console.error('[ProgressStore] Failed to sync step:', error);
+      });
+    }).catch(() => {
+      // Sync module not available, skip
+    });
 
     set({
       currentAttempt: updatedAttempt,

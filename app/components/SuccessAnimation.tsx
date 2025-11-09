@@ -21,6 +21,42 @@ import { Colors, Spacing } from '../styles';
 
 const { width, height } = Dimensions.get('window');
 
+/**
+ * Individual confetti particle component
+ * Separated to avoid hooks-in-loop issue
+ */
+interface ParticleProps {
+  particle: {
+    translateY: Animated.SharedValue<number>;
+    translateX: Animated.SharedValue<number>;
+    opacity: Animated.SharedValue<number>;
+    scale: Animated.SharedValue<number>;
+    rotate: Animated.SharedValue<number>;
+  };
+  emoji: string;
+  color: string;
+}
+
+const ConfettiParticle: React.FC<ParticleProps> = ({ particle, emoji, color }) => {
+  const animatedParticleStyle = useAnimatedStyle(() => {
+    return {
+      opacity: particle.opacity.value,
+      transform: [
+        { translateX: particle.translateX.value },
+        { translateY: particle.translateY.value },
+        { scale: particle.scale.value },
+        { rotate: `${particle.rotate.value}deg` },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={[styles.particle, animatedParticleStyle]}>
+      <Text style={[styles.particleEmoji, { color }]}>{emoji}</Text>
+    </Animated.View>
+  );
+};
+
 interface SuccessAnimationProps {
   /** Show the animation */
   visible: boolean;
@@ -165,28 +201,14 @@ const SuccessAnimation: React.FC<SuccessAnimationProps> = ({
 
         {/* Confetti particles */}
         <View style={styles.confettiContainer}>
-          {particleAnimations.map((particle, index) => {
-            const animatedParticleStyle = useAnimatedStyle(() => {
-              return {
-                opacity: particle.opacity.value,
-                transform: [
-                  { translateX: particle.translateX.value },
-                  { translateY: particle.translateY.value },
-                  { scale: particle.scale.value },
-                  { rotate: `${particle.rotate.value}deg` },
-                ],
-              };
-            });
-
-            return (
-              <Animated.Text
-                key={index}
-                style={[styles.confettiEmoji, animatedParticleStyle]}
-              >
-                {confettiEmojis[index]}
-              </Animated.Text>
-            );
-          })}
+          {particleAnimations.map((particle, index) => (
+            <ConfettiParticle
+              key={index}
+              particle={particle}
+              emoji={confettiEmojis[index]}
+              color={Colors.primary.main}
+            />
+          ))}
         </View>
       </Animated.View>
     </View>
@@ -238,6 +260,12 @@ const styles = StyleSheet.create({
   },
   confettiEmoji: {
     position: 'absolute',
+    fontSize: 32,
+  },
+  particle: {
+    position: 'absolute',
+  },
+  particleEmoji: {
     fontSize: 32,
   },
 });

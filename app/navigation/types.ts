@@ -21,6 +21,11 @@ export type RootStackParamList = {
     attemptId?: string; // Optional: specific attempt to review
   };
   Settings: undefined; // No params needed for settings
+  // Tutorial Mode (PR14)
+  TutorialLibrary: undefined; // No params needed for tutorial library
+  Tutorial: {
+    lessonId: string; // Required: ID of the lesson to display
+  };
 };
 
 /**
@@ -31,6 +36,8 @@ export type HomeScreenProps = NativeStackScreenProps<RootStackParamList, 'Home'>
 export type TrainingModeScreenProps = NativeStackScreenProps<RootStackParamList, 'TrainingMode'>;
 export type ReviewScreenProps = NativeStackScreenProps<RootStackParamList, 'Review'>;
 export type SettingsScreenProps = NativeStackScreenProps<RootStackParamList, 'Settings'>;
+export type TutorialLibraryScreenProps = NativeStackScreenProps<RootStackParamList, 'TutorialLibrary'>;
+export type TutorialScreenProps = NativeStackScreenProps<RootStackParamList, 'Tutorial'>;
 
 /**
  * Navigation Prop Types

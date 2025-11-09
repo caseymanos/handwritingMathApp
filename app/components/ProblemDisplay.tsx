@@ -131,10 +131,10 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
   },
   instructions: {
-    ...TextStyles.bodySmall,
+    fontSize: 20,
+    fontWeight: '700',
     color: Colors.text.secondary,
     marginBottom: Spacing.sm,
-    fontStyle: 'italic',
     textAlign: 'center',
   },
   mathContainer: {

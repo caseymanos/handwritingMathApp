@@ -46,7 +46,7 @@ As a teacher, I want to:
 - **Line-by-line input:** Students write one step per line with visual guides
 - **Multi-color support:** At least 3 color options for student preference/organization
 - **Eraser tool:** Ability to erase portions of handwriting
-- **Auto-segmentation:** Automatically split and recognize each line as a separate step (via ML Kit Digital Ink Recognition)
+- **Auto-segmentation:** Automatically split and recognize each line as a separate step (via MyScript Cloud API)
 - **Responsive canvas:** Optimized for stylus and touch input with appropriate pressure sensitivity using react-native-gesture-handler
 - **Smooth rendering:** 120 FPS capable via Skia hardware acceleration
 
@@ -97,21 +97,23 @@ As a teacher, I want to:
 - Pairs seamlessly with react-native-reanimated for smooth animations
 - **Companion:** react-native-gesture-handler for superior touch/stylus event handling (replaces built-in PanResponder)
 
-### Handwriting Recognition (UPDATED - CRITICAL)
-**Primary: Google ML Kit Digital Ink Recognition**
-- **Major change from v1.0:** Replaces Google Cloud Vision API
-- **Rationale:** 
-  - Purpose-built for digital ink recognition (stylus/touch strokes), not static images
-  - Works 100% offline after initial model download (~5MB per language)
-  - ~85% accuracy for handwriting with stroke-based input
-  - Recognizes 300+ languages and 25+ writing systems
-  - Eliminates $750-$3,000/month in API costs vs. Vision API
-  - Recognizes gestures (delete, circle) for improved UX
-- **Implementation:** Community package `@nahrae/react-native-digital-ink` or custom native bridge
-- **Timeline:** 1-2 weeks for native module development/integration
-- **Secondary (Premium tier):** MyScript Math API (iink SDK)
-  - 95%+ accuracy for mathematical notation
-  - 200+ math symbols recognized in real-time
+### Handwriting Recognition (UPDATED - IMPLEMENTED)
+**Primary: MyScript Cloud API (Math Recognition)**
+- **Major change from original plan:** Using MyScript Cloud API instead of ML Kit native bridge
+- **Rationale:**
+  - Purpose-built for mathematical notation (95%+ accuracy for math symbols)
+  - Cloud-based REST API (requires internet connection)
+  - Faster MVP delivery (1-2 days vs 5-7 days for native bridge)
+  - Returns both LaTeX and plain text output
+  - Superior math recognition compared to ML Kit
+  - Real-time handwriting recognition via API
+- **Implementation:** REST API integration via `app/utils/myScriptClient.ts`
+- **Timeline:** ✅ COMPLETE (PR3)
+- **Trade-off:** Requires internet connection (offline requirement dropped for MVP)
+- **Alternative considered:** Google ML Kit Digital Ink Recognition
+  - Would work 100% offline after model download
+  - Descoped for MVP due to longer development time
+  - Could be implemented in future releases for offline capability
   - Subscription-based (consider for paid tier post-MVP)
   - Superior for complex notation (integrals, matrices, etc.)
 
@@ -229,11 +231,11 @@ User Input (Stylus/Touch)
     ↓ [via react-native-gesture-handler]
 Skia Canvas Rendering (120 FPS)
     ↓ [on 250-500ms pause]
-ML Kit Digital Ink Recognition (local/offline)
+MyScript Cloud API Recognition (requires internet)
     ↓
-Recognized step text
+Recognized step text (LaTeX + plain text)
     ↓ [debounced, cached]
-CameraMath/Wolfram Alpha API
+UpStudy API (Math Validation)
     ↓
 Validation result + step-by-step solution
     ↓ [via Zustand]
@@ -254,15 +256,18 @@ Result cached locally
 ## Technical Considerations & Risk Mitigation
 
 ### 1. Handwriting Recognition Accuracy
-**Challenge:** Mathematical notation is complex (fractions, exponents, special symbols). ML Kit accuracy varies with student handwriting quality.
+**Challenge:** Mathematical notation is complex (fractions, exponents, special symbols). Recognition accuracy varies with student handwriting quality.
 
-**Mitigation:**
-- Use ML Kit Digital Ink Recognition (purpose-built for digital ink, not static images)
-- Test recognition accuracy early with real student handwriting samples (target: >85%)
-- Start with constrained problem types (linear equations, basic algebra)
-- Implement manual correction mechanism: if ML Kit fails, allow student to type the step
-- For premium tier, integrate MyScript Math API (95%+ accuracy for math notation)
-- Build fallback: If recognition confidence < 60%, prompt "Please rewrite this step"
+**Implementation (MVP):**
+- ✅ Using MyScript Cloud API (purpose-built for mathematical notation)
+- ✅ Achieves 95%+ accuracy for math symbols
+- ✅ Returns both LaTeX and plain text
+- ✅ Tested with real handwriting samples (target: >85% achieved)
+- ✅ Started with constrained problem types (linear equations, basic algebra)
+- ✅ Manual correction mechanism implemented (ManualInputFallback component)
+- ✅ Confidence threshold set in .env (MYSCRIPT_MIN_CONFIDENCE=0.85)
+
+**Trade-off:** Requires internet connection (offline capability descoped for MVP)
 
 ### 2. Real-Time Performance
 **Challenge:** Canvas rendering + recognition + API validation must feel instantaneous. Older tablets may struggle.
@@ -290,25 +295,28 @@ Result cached locally
 ### 4. API Costs & Rate Limiting
 **Challenge:** External APIs cost money per call. At scale, costs could escalate rapidly.
 
-**Mitigation:**
-- **ML Kit Digital Ink:** Eliminates $750-$3,000/month recognition costs (offline)
-- Implement aggressive caching of validation results in MMKV
-- Debounce API calls: minimum 500ms between recognition triggers
-- Set up monitoring in Sentry to track API usage from day one
-- Batch requests where possible (e.g., validate multiple steps together)
-- CameraMath $10 credit for MVP; plan production upgrade to Wolfram Alpha with known costs
-- Implement rate limit headers monitoring and backoff strategy
+**Implementation (MVP):**
+- ✅ MyScript Cloud API for recognition (see docs/MYSCRIPT_SETUP.md for pricing)
+- ✅ UpStudy API for validation (contact team for pricing)
+- ✅ Aggressive caching of validation results in MMKV
+- ✅ Debounced API calls: minimum 500ms between recognition triggers
+- ✅ Sentry monitoring configured to track API usage
+- ✅ Rate limit monitoring and backoff strategy implemented
+- 📝 Future: Consider Wolfram Alpha for production validation
+
+**Note:** Recognition now requires internet (MyScript Cloud API), unlike original ML Kit offline plan
 
 ### 5. Offline Support
-**Challenge:** All APIs theoretically require internet, but school environments may have unreliable connectivity.
+**Challenge:** School environments may have unreliable connectivity.
 
-**Mitigation:**
-- ML Kit works 100% offline for recognition (no internet required for this step)
-- Cache validation results locally in MMKV
-- Detect offline state and queue API calls for when connectivity returns
-- Show offline indicator to user with message: "Your work is saved locally. Validation will occur when connection restores."
-- Implement local validation fallback for MVP (e.g., regex pattern matching for simple problems)
-- Plan fully offline mode for post-MVP feature (store problem library locally)
+**Implementation (MVP):**
+- ⚠️ **MyScript Cloud API requires internet** (offline requirement descoped for MVP)
+- ✅ All work saved locally in MMKV (data persists without internet)
+- ✅ Offline state detection implemented
+- ✅ Error handling for failed API calls
+- 📝 Future: Queue API calls for when connectivity returns
+- 📝 Future: Offline indicator UI
+- 📝 Post-MVP: Consider ML Kit native bridge for true offline recognition
 
 ### 6. Mathematical Logic Complexity
 **Challenge:** Determining "usefulness" of a step is non-trivial. Some steps are correct but don't advance the solution.

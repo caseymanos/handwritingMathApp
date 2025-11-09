@@ -65,6 +65,9 @@ export interface ValidationResult {
 
   /** Raw API response (for debugging) */
   apiResponse?: any;
+
+  /** Is this the final answer to the problem? */
+  isFinalAnswer?: boolean;
 }
 
 /**

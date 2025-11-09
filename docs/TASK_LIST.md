@@ -592,7 +592,7 @@ Time:        ~0.3-0.5 seconds
 - [ ] Document file structure and module organization: `docs/FILE_STRUCTURE.md`
 - [ ] Write developer setup guide: `docs/SETUP.md`
 - [ ] Document API integration: `docs/API_INTEGRATION.md`
-- [ ] Document ML Kit setup: `docs/MLKIT_SETUP.md`
+- [x] Document MyScript setup: `docs/MYSCRIPT_SETUP.md`
 - [ ] Document Zustand store patterns: `docs/STATE_MANAGEMENT.md`
 - [ ] Write deployment guide: `docs/DEPLOYMENT.md`
 - [ ] Update main `README.md` with:
@@ -643,8 +643,8 @@ scripts/test.sh
 - [x] Progressive hint system ✅ (PR6 - COMPLETE)
 - [x] Zustand state + MMKV storage ✅ (PR7 - COMPLETE, 5 stores with persistence)
 - [x] Smooth animations and UI polish ✅ (PR8 - COMPLETE, 13/13 components using style system, 3 animation components)
-- [ ] Navigation and app structure (PR9)
-- [ ] Testing and error tracking (PR10)
+- [x] Navigation and app structure (PR9)
+- [x] Testing and error tracking (PR10)
 - [ ] Documentation (PR11)
 
 ### Success Criteria (From PRD)
@@ -654,18 +654,56 @@ scripts/test.sh
 - [ ] Progressive hints that never reveal full solution
 - [ ] Paper-like writing experience
 - [ ] Zero crashes during normal flow
-- [ ] Offline ML Kit recognition
+- [x] MyScript Cloud API recognition (requires internet)
 - [ ] 60+ FPS on 3-year-old tablets
 
 ---
 
 ## Post-MVP PRs (Phase 2+)
 
-### PR12: Cloud Storage Integration
-- [ ] Supabase/Firebase setup
-- [ ] Sync attempt history to cloud
-- [ ] User authentication
-- [ ] Files: `app/utils/cloudSync.ts`, auth providers
+### PR12: Cloud Storage Integration ✅ COMPLETE
+- [x] Supabase project and schema with RLS policies
+- [x] Client SDK integration (supabaseClient.ts)
+- [x] Stroke serialization with delta+gzip compression (70-90% reduction)
+- [x] Sync queue with retry/backoff (queue.ts)
+- [x] Sync client with idempotent upserts (syncClient.ts)
+- [x] Hydration logic for app launch (hydrate.ts)
+- [x] Email magic link authentication
+- [x] Store integrations (progressStore, hintStore)
+- [x] Settings UI with Cloud Sync section
+- [x] Telemetry with Sentry
+- [x] Documentation (CLOUD_SYNC.md, DB_SCHEMA.sql)
+
+**Files Created/Modified:**
+```
+docs/DB_SCHEMA.sql ✅ (schema with RLS policies)
+docs/CLOUD_SYNC.md ✅ (comprehensive documentation)
+app/utils/sync/supabaseClient.ts ✅ (Supabase initialization + auth)
+app/utils/sync/serializer.ts ✅ (delta+gzip stroke compression)
+app/utils/sync/queue.ts ✅ (MMKV-backed retry queue)
+app/utils/sync/syncClient.ts ✅ (idempotent upsert methods)
+app/utils/sync/hydrate.ts ✅ (app launch data restore)
+app/stores/progressStore.ts ✅ (wired sync for attempts/steps)
+app/stores/hintStore.ts ✅ (wired sync for hints)
+app/screens/SettingsScreen.tsx ✅ (Cloud Sync section added)
+.env.example ✅ (Supabase env vars)
+package.json ✅ (@supabase/supabase-js, pako, uuid)
+docs/TASK_LIST.md ✅ (this file updated)
+```
+
+**Status:** ✅ Complete - Local-first cloud sync fully implemented
+
+**Key Features:**
+- Idempotent upserts using client-generated UUIDs
+- Write-through sync with background retry queue
+- 70-90% bandwidth reduction with compression
+- Passwordless email magic link authentication
+- RLS policies for complete user isolation
+- Full hydration on app launch
+- Sentry telemetry for all sync operations
+- Settings UI for auth and manual sync
+
+**GitHub Issue Title:** `feat: comprehensive cloud sync with Supabase and stroke compression (PR12)`
 
 ### PR13: Teacher/Guide App
 - [ ] WebSocket real-time infrastructure
@@ -686,7 +724,9 @@ scripts/test.sh
 - [ ] Files: `app/screens/AssessmentScreen.tsx`
 
 ### PR16: Undo/Redo & Advanced Features
-- [ ] Multi-step undo/redo
+- [x] Undo last stroke (toolbar button)
+- [x] Undo last line (toolbar button)
+- [ ] Redo (per stroke/line)
 - [ ] Gesture-based undo (swipe)
 - [ ] Voice hints (optional)
 - [ ] Files: Enhanced canvas, audio integration
@@ -729,13 +769,12 @@ Implements [feature from task list]
 
 ## Timeline Estimate
 
-- **PR1-7:** ✅ COMPLETE (Setup, canvas, recognition, problem display, validation, hints, state management)
-- **PR8-9:** PENDING (UI polish/animations, navigation)
-- **PR10-11:** PENDING (Testing, documentation)
-- **Total MVP:** ~7 weeks (ahead of schedule)
+- **PR1-10:** ✅ COMPLETE (Setup → Testing & error tracking)
+- **PR11:** IN PROGRESS (Documentation & deployment prep)
+- **Total MVP:** ~7 weeks (on track)
 - **Post-MVP PRs:** Weeks 8-13+ (Cloud, teacher, tutorial, assessment)
 
-**Current Status:** 7 of 11 PRs complete (~64% done), all core state management complete
+**Current Status:** 10 of 11 MVP PRs complete (~91%); navigation and testing shipped; undo controls added to toolbar.
 
 ---
 

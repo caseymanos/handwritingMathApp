@@ -1,8 +1,8 @@
 /**
  * FloatingToolbar Component
  *
- * Draggable toolbar with color picker and tool selection
- * Snaps to 9 positions: top/middle/bottom x left/center/right
+ * Modern draggable toolbar with Kokonut UI style
+ * Snaps to 2 positions: left-center (vertical/rotated) or bottom-center (horizontal)
  */
 
 import React, { useState, useCallback } from 'react';
@@ -12,11 +12,11 @@ import {
   StyleSheet,
   Text,
   useWindowDimensions,
+  Animated,
 } from 'react-native';
 import {
   Gesture,
   GestureDetector,
-  GestureHandlerRootView,
 } from 'react-native-gesture-handler';
 import {
   DrawingTool,
@@ -24,7 +24,7 @@ import {
   CanvasColor,
   ToolbarPosition,
 } from '../types/Canvas';
-import { Colors, Spacing, TextStyles, Shadows } from '../styles';
+import { Colors, Spacing } from '../styles';
 
 interface FloatingToolbarProps {
   selectedColor: CanvasColor;
@@ -36,10 +36,15 @@ interface FloatingToolbarProps {
   onClose: () => void;
   position: ToolbarPosition;
   onPositionChange: (position: ToolbarPosition) => void;
+  // Undo controls (optional)
+  onUndoStroke?: () => void;
+  onUndoLine?: () => void;
+  canUndo?: boolean;
 }
 
 /**
  * Calculate snap position based on drag coordinates
+ * Only 2 positions: MIDDLE_LEFT or BOTTOM_CENTER
  */
 const calculateSnapPosition = (
   x: number,
@@ -47,33 +52,16 @@ const calculateSnapPosition = (
   screenWidth: number,
   screenHeight: number
 ): ToolbarPosition => {
-  const horizontalThird = screenWidth / 3;
-  const verticalThird = screenHeight / 3;
+  // Determine if closer to left edge or bottom edge
+  const distanceToLeft = x;
+  const distanceToBottom = screenHeight - y;
 
-  let horizontal: 'left' | 'center' | 'right';
-  let vertical: 'top' | 'middle' | 'bottom';
-
-  // Determine horizontal position
-  if (x < horizontalThird) {
-    horizontal = 'left';
-  } else if (x < horizontalThird * 2) {
-    horizontal = 'center';
-  } else {
-    horizontal = 'right';
+  // If closer to left edge than bottom, snap to MIDDLE_LEFT
+  // Otherwise snap to BOTTOM_CENTER
+  if (distanceToLeft < distanceToBottom && x < screenWidth / 2) {
+    return ToolbarPosition.MIDDLE_LEFT;
   }
-
-  // Determine vertical position
-  if (y < verticalThird) {
-    vertical = 'top';
-  } else if (y < verticalThird * 2) {
-    vertical = 'middle';
-  } else {
-    vertical = 'bottom';
-  }
-
-  // Combine to form position enum
-  const positionKey = `${vertical.toUpperCase()}_${horizontal.toUpperCase()}`;
-  return ToolbarPosition[positionKey as keyof typeof ToolbarPosition];
+  return ToolbarPosition.BOTTOM_CENTER;
 };
 
 /**
@@ -85,28 +73,25 @@ const getAbsolutePosition = (
   screenHeight: number,
   toolbarWidth: number,
   toolbarHeight: number
-): { x: number; y: number } => {
-  const padding = Spacing.lg;
+): { x: number; y: number; rotation: string } => {
+  const padding = 16;
 
-  switch (position) {
-    case ToolbarPosition.TOP_LEFT:
-      return { x: padding, y: padding };
-    case ToolbarPosition.TOP_CENTER:
-      return { x: (screenWidth - toolbarWidth) / 2, y: padding };
-    case ToolbarPosition.TOP_RIGHT:
-      return { x: screenWidth - toolbarWidth - padding, y: padding };
-    case ToolbarPosition.MIDDLE_LEFT:
-      return { x: padding, y: (screenHeight - toolbarHeight) / 2 };
-    case ToolbarPosition.MIDDLE_CENTER:
-      return { x: (screenWidth - toolbarWidth) / 2, y: (screenHeight - toolbarHeight) / 2 };
-    case ToolbarPosition.MIDDLE_RIGHT:
-      return { x: screenWidth - toolbarWidth - padding, y: (screenHeight - toolbarHeight) / 2 };
-    case ToolbarPosition.BOTTOM_LEFT:
-      return { x: padding, y: screenHeight - toolbarHeight - padding };
-    case ToolbarPosition.BOTTOM_CENTER:
-      return { x: (screenWidth - toolbarWidth) / 2, y: screenHeight - toolbarHeight - padding };
-    case ToolbarPosition.BOTTOM_RIGHT:
-      return { x: screenWidth - toolbarWidth - padding, y: screenHeight - toolbarHeight - padding };
+  if (position === ToolbarPosition.MIDDLE_LEFT) {
+    // Vertical on left side (rotated) - hug left edge, centered vertically
+    return {
+      // Move back to previous comfortable offset so the toolbar hugs the edge
+      // regardless of width changes.
+      x: -275, 
+      y: screenHeight / 2, // Center vertically
+      rotation: '-90deg',
+    };
+  } else {
+    // Horizontal on bottom - push up by 1/3 toolbar height to avoid iPad swipe gesture
+    return {
+      x: (screenWidth - toolbarWidth) / 2,
+      y: screenHeight - toolbarHeight - padding - (toolbarHeight / 3),
+      rotation: '0deg',
+    };
   }
 };
 
@@ -120,85 +105,106 @@ export const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
   onClose,
   position,
   onPositionChange,
+  onUndoStroke,
+  onUndoLine,
+  canUndo = true,
 }) => {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
 
-  // Responsive dimensions based on screen size
-  const isTablet = screenWidth >= 768;
-  const toolbarWidth = isTablet ? 80 : 60;
-  const toolbarHeight = isTablet ? 400 : 200;
+  // Dimensions for toolbar
+  // Widened to accommodate new undo buttons so the white background fully covers all controls.
+  // Clamp to screen width with a small margin to avoid edge clipping.
+  const toolbarHeight = 64;
+  const toolbarWidth = Math.min(screenWidth - 40, 620);
 
-  const absolutePosition = getAbsolutePosition(position, screenWidth, screenHeight, toolbarWidth, toolbarHeight);
-  const currentX = absolutePosition.x + dragOffset.x;
-  const currentY = absolutePosition.y + dragOffset.y;
+  const { x, y, rotation } = getAbsolutePosition(
+    position,
+    screenWidth,
+    screenHeight,
+    toolbarWidth,
+    toolbarHeight
+  );
+  const currentX = x + dragOffset.x;
+  const currentY = y + dragOffset.y;
+
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
+  }, []);
+
+  const handleDragUpdate = useCallback((translationX: number, translationY: number) => {
+    setDragOffset({ x: translationX, y: translationY });
+  }, []);
+
+  const handleDragEnd = useCallback((translationX: number, translationY: number) => {
+    // Calculate final position
+    const finalX = x + translationX;
+    const finalY = y + translationY;
+
+    // Determine snap position
+    const newPosition = calculateSnapPosition(finalX, finalY, screenWidth, screenHeight);
+    onPositionChange(newPosition);
+
+    // Reset drag offset
+    setDragOffset({ x: 0, y: 0 });
+    setIsDragging(false);
+  }, [x, y, screenWidth, screenHeight, onPositionChange]);
 
   const panGesture = Gesture.Pan()
     .onStart(() => {
-      setIsDragging(true);
+      handleDragStart();
     })
     .onUpdate((event) => {
-      setDragOffset({
-        x: event.translationX,
-        y: event.translationY,
-      });
+      handleDragUpdate(event.translationX, event.translationY);
     })
     .onEnd((event) => {
-      // Calculate final position
-      const finalX = absolutePosition.x + event.translationX;
-      const finalY = absolutePosition.y + event.translationY;
-
-      // Determine snap position
-      const newPosition = calculateSnapPosition(finalX, finalY, screenWidth, screenHeight);
-      onPositionChange(newPosition);
-
-      // Reset drag offset
-      setDragOffset({ x: 0, y: 0 });
-      setIsDragging(false);
-    });
+      handleDragEnd(event.translationX, event.translationY);
+    })
+    .runOnJS(true);
 
   const colorOptions = Object.entries(CANVAS_COLORS);
 
-  // Responsive button sizes
-  const buttonSize = isTablet ? 50 : 36;
-  const iconSize = isTablet ? 24 : 18;
-  const padding = isTablet ? 12 : 8;
-
   return (
-    <GestureHandlerRootView style={StyleSheet.absoluteFill} pointerEvents="box-none">
-      <GestureDetector gesture={panGesture}>
-        <View
-          style={[
-            styles.toolbar,
-            {
-              left: currentX,
-              top: currentY,
-              opacity: isDragging ? 0.8 : 1,
-              width: toolbarWidth,
-              padding: padding,
-            },
-          ]}
-        >
-          {/* Header with drag handle and close button */}
-          <View style={styles.header}>
-            <View style={styles.dragHandle}>
-              <View style={styles.dragIndicator} />
-              <View style={styles.dragIndicator} />
-              <View style={styles.dragIndicator} />
-            </View>
-            <TouchableOpacity
-              style={styles.closeButton}
-              onPress={onClose}
-              accessibilityLabel="Hide toolbar"
+    <GestureDetector gesture={panGesture}>
+      <View
+        style={[
+          styles.toolbar,
+          {
+            left: currentX,
+            top: currentY,
+            width: toolbarWidth,
+            height: toolbarHeight,
+            opacity: isDragging ? 0.9 : 1,
+            transform: [{ rotate: rotation }],
+          },
+        ]}
+      >
+          {/* Flip Position Arrow (tap to toggle between left/bottom) */}
+          <TouchableOpacity
+            style={styles.flipButton}
+            onPress={() =>
+              onPositionChange(
+                position === ToolbarPosition.MIDDLE_LEFT
+                  ? ToolbarPosition.BOTTOM_CENTER
+                  : ToolbarPosition.MIDDLE_LEFT
+              )
+            }
+            accessibilityLabel="Flip toolbar position"
+          >
+            {/* Keep arrow upright even when toolbar is rotated */}
+            <Text
+              style={[
+                styles.flipIcon,
+                rotation === '-90deg' ? { transform: [{ rotate: '90deg' }] } : null,
+              ]}
             >
-              <Text style={styles.closeIcon}>✕</Text>
-            </TouchableOpacity>
-          </View>
+              {position === ToolbarPosition.BOTTOM_CENTER ? '↖︎' : '↘︎'}
+            </Text>
+          </TouchableOpacity>
 
           {/* Color Picker */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontSize: isTablet ? 12 : 10 }]}>Colors</Text>
+          <View style={styles.colorSection}>
             {colorOptions.map(([name, color]) => {
               const isSelected = selectedColor === color;
               return (
@@ -206,151 +212,198 @@ export const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
                   key={name}
                   style={[
                     styles.colorButton,
-                    {
-                      backgroundColor: color,
-                      width: buttonSize,
-                      height: buttonSize,
-                      borderRadius: buttonSize / 2,
-                    },
-                    isSelected && styles.selectedBorder,
+                    { backgroundColor: color },
+                    isSelected && styles.selectedColorBorder,
                   ]}
                   onPress={() => onColorSelect(color)}
                   accessibilityLabel={`Select ${name.toLowerCase()} color`}
                 >
-                  {isSelected && <View style={[styles.selectedDot, { width: buttonSize / 4, height: buttonSize / 4, borderRadius: buttonSize / 8 }]} />}
+                  {isSelected && <View style={styles.selectedDot} />}
                 </TouchableOpacity>
               );
             })}
           </View>
 
+          {/* Divider */}
+          <View style={styles.divider} />
+
           {/* Tool Selection */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { fontSize: isTablet ? 12 : 10 }]}>Tools</Text>
+          <View style={styles.toolSection}>
             <TouchableOpacity
               style={[
                 styles.toolButton,
-                {
-                  width: buttonSize,
-                  height: buttonSize,
-                },
                 selectedTool === DrawingTool.PEN && styles.selectedTool,
               ]}
               onPress={() => onToolSelect(DrawingTool.PEN)}
               accessibilityLabel="Select pen tool"
             >
-              <Text style={[styles.toolIcon, { fontSize: iconSize }]}>✏️</Text>
+              <Text style={styles.toolIcon}>✏️</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.toolButton,
-                {
-                  width: buttonSize,
-                  height: buttonSize,
-                },
                 selectedTool === DrawingTool.ERASER && styles.selectedTool,
               ]}
               onPress={() => onToolSelect(DrawingTool.ERASER)}
               accessibilityLabel="Select eraser tool"
             >
-              <Text style={[styles.toolIcon, { fontSize: iconSize }]}>⌫</Text>
+              <Text style={styles.toolIcon}>⌫</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Line Guides Toggle */}
-          <View style={styles.section}>
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Undo Controls */}
+          <View style={styles.toolSection}>
             <TouchableOpacity
-              style={[
-                styles.toolButton,
-                {
-                  width: buttonSize,
-                  height: buttonSize,
-                },
-                showLineGuides && styles.selectedTool,
-              ]}
-              onPress={onToggleLineGuides}
-              accessibilityLabel={`${showLineGuides ? 'Hide' : 'Show'} line guides`}
+              disabled={!canUndo}
+              style={[styles.toolButton, !canUndo && styles.disabledButton]}
+              onPress={onUndoStroke}
+              accessibilityLabel="Undo last stroke"
             >
-              <Text style={[styles.toolIcon, { fontSize: iconSize }]}>📏</Text>
+              <Text style={[styles.toolIcon, styles.strongIcon]}>↶</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={!canUndo}
+              style={[styles.toolButton, !canUndo && styles.disabledButton]}
+              onPress={onUndoLine}
+              accessibilityLabel="Undo last line"
+            >
+              <Text style={[styles.toolIcon, styles.strongIcon]}>⤺</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      </GestureDetector>
-    </GestureHandlerRootView>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Line Guides Toggle */}
+          <TouchableOpacity
+            style={[
+              styles.toolButton,
+              showLineGuides && styles.selectedTool,
+            ]}
+            onPress={onToggleLineGuides}
+            accessibilityLabel={`${showLineGuides ? 'Hide' : 'Show'} line guides`}
+          >
+            <Text style={styles.toolIcon}>📏</Text>
+          </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Close Button */}
+          <TouchableOpacity
+            style={styles.closeButton}
+            onPress={onClose}
+            accessibilityLabel="Hide toolbar"
+          >
+            <Text style={styles.closeIcon}>✕</Text>
+          </TouchableOpacity>
+      </View>
+    </GestureDetector>
   );
 };
 
 const styles = StyleSheet.create({
   toolbar: {
     position: 'absolute',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: Spacing.component.borderRadiusLarge,
-    ...Shadows.large,
-  },
-  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
-    paddingBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.ui.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 32,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+    zIndex: 1000,
   },
-  dragHandle: {
-    flexDirection: 'column',
-    gap: Spacing.xs / 2,
-  },
-  dragIndicator: {
-    width: 20,
-    height: 3,
-    backgroundColor: Colors.ui.inactive,
-    borderRadius: 2,
-  },
-  closeButton: {
-    width: 24,
-    height: 24,
+  flipButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
-  closeIcon: {
-    ...TextStyles.h3,
-    color: Colors.text.secondary,
+  flipIcon: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: '600',
   },
-  section: {
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    ...TextStyles.labelMedium,
-    color: Colors.text.secondary,
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
+  colorSection: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
   colorButton: {
-    marginVertical: Spacing.xs,
-    alignSelf: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  selectedBorder: {
-    borderColor: Colors.primary.main,
-    borderWidth: 3,
+  selectedColorBorder: {
+    borderColor: '#000',
+    borderWidth: 2.5,
   },
   selectedDot: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  },
+  divider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    marginHorizontal: 12,
+  },
+  toolSection: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
   toolButton: {
-    borderRadius: Spacing.component.borderRadius,
-    backgroundColor: Colors.background.secondary,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: Spacing.xs,
-    alignSelf: 'center',
   },
   selectedTool: {
-    backgroundColor: Colors.primary.main,
+    backgroundColor: '#5856D6',
   },
   toolIcon: {
-    // fontSize set dynamically based on device size
+    fontSize: 20,
+  },
+  closeButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeIcon: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.4,
+  },
+  strongIcon: {
+    fontSize: 24,
+    fontWeight: '800',
   },
 });

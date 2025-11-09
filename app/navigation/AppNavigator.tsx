@@ -14,6 +14,8 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { TrainingModeScreen } from '../screens/TrainingModeScreen';
 import { ReviewScreen } from '../screens/ReviewScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { TutorialLibraryScreen } from '../screens/TutorialLibraryScreen';
+import { TutorialScreen } from '../screens/TutorialScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -62,6 +64,21 @@ export const AppNavigator: React.FC = () => {
         options={{
           title: 'Settings',
           presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
+        name="TutorialLibrary"
+        component={TutorialLibraryScreen}
+        options={{
+          title: 'Tutorial Library',
+        }}
+      />
+      <Stack.Screen
+        name="Tutorial"
+        component={TutorialScreen}
+        options={{
+          title: 'Tutorial',
+          headerShown: false, // Hide header for immersive video experience
         }}
       />
     </Stack.Navigator>

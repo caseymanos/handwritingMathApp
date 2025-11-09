@@ -11,9 +11,10 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import type { HomeScreenProps } from '../navigation/types';
 import { getRandomProblem } from '../utils/problemData';
+import { ProblemDifficulty } from '../types/Problem';
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
-  const handleStartProblem = (difficulty?: 'EASY' | 'MEDIUM' | 'HARD') => {
+  const handleStartProblem = (difficulty?: ProblemDifficulty) => {
     const problem = getRandomProblem(difficulty);
     if (problem) {
       navigation.navigate('TrainingMode', { problemId: problem.id });
@@ -47,7 +48,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.button, styles.difficultyButton, styles.easyButton]}
-          onPress={() => handleStartProblem('EASY')}
+          onPress={() => handleStartProblem(ProblemDifficulty.EASY)}
         >
           <Text style={styles.difficultyButtonText}>Easy</Text>
           <Text style={styles.difficultyDescription}>One-step equations (x + 5 = 12)</Text>
@@ -55,7 +56,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.button, styles.difficultyButton, styles.mediumButton]}
-          onPress={() => handleStartProblem('MEDIUM')}
+          onPress={() => handleStartProblem(ProblemDifficulty.MEDIUM)}
         >
           <Text style={styles.difficultyButtonText}>Medium</Text>
           <Text style={styles.difficultyDescription}>Two-step equations (2x + 3 = 11)</Text>
@@ -63,10 +64,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.button, styles.difficultyButton, styles.hardButton]}
-          onPress={() => handleStartProblem('HARD')}
+          onPress={() => handleStartProblem(ProblemDifficulty.HARD)}
         >
           <Text style={styles.difficultyButtonText}>Hard</Text>
           <Text style={styles.difficultyDescription}>Variables on both sides (3x + 7 = 2x + 15)</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Learn Section - Tutorial Mode (PR14) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Learn</Text>
+
+        <TouchableOpacity
+          style={[styles.button, styles.secondaryButton]}
+          onPress={() => navigation.navigate('TutorialLibrary')}
+        >
+          <Text style={styles.secondaryButtonText}>📚 Tutorial Library</Text>
+          <Text style={styles.buttonSubtext}>Watch video lessons and unlock problems</Text>
         </TouchableOpacity>
       </View>
 

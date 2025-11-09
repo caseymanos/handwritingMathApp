@@ -35,7 +35,7 @@ interface RecognitionIndicatorProps {
  *
  * Shows recognition status and results at the top of the canvas
  */
-export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
+export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = React.memo(({
   top = 20,
   showConfidence = true,
   showErrors = true,
@@ -145,7 +145,7 @@ export const RecognitionIndicator: React.FC<RecognitionIndicatorProps> = ({
       {renderContent()}
     </Animated.View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     ...Shadows.medium,
     zIndex: 1000,
     minWidth: 60,
-    maxWidth: 200,
+    maxWidth: 400,
   },
   contentRow: {
     flexDirection: 'row',

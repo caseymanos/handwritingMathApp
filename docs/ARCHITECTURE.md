@@ -42,10 +42,10 @@ This document maps each PR task list to specific architectural components and da
          │                        │                    │
          ▼                        ▼                    ▼
     ┌─────────────────┐  ┌──────────────────┐  ┌─────────────┐
-    │ Skia Canvas     │  │ ML Kit Bridge    │  │ Reanimated  │
-    │ + Gesture       │  │ (Native Module)  │  │ + Skottie   │
+    │ Skia Canvas     │  │ MyScript Cloud   │  │ Reanimated  │
+    │ + Gesture       │  │ API (REST)       │  │ + Skottie   │
     │ Handler (Stylus)│  │ - Recognition    │  │ Animations  │
-    │                 │  │ - Stroke parsing │  │             │
+    │                 │  │ - LaTeX output   │  │             │
     └─────────────────┘  └──────────────────┘  └─────────────┘
          │                        │                    
          ▼                        ▼                    
@@ -57,7 +57,7 @@ This document maps each PR task list to specific architectural components and da
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  ┌──────────────────┐  ┌────────────────────┐  ┌─────────────┐ │
-│  │ CameraMath API   │  │ KaTeX Rendering    │  │   Sentry    │ │
+│  │ UpStudy API      │  │ KaTeX Rendering    │  │   Sentry    │ │
 │  │                  │  │ (Problem Display)  │  │ (Error Track)│ │
 │  │ - Math Validation│  │ - LaTeX parsing    │  │             │ │
 │  │ - Step checking  │  │ - SVG output       │  └─────────────┘ │
@@ -77,15 +77,15 @@ This document maps each PR task list to specific architectural components and da
    └─> Skia renders stroke to canvas
    └─> Strokes stored in canvasStore (Zustand)
 
-2. ML KIT RECOGNITION TRIGGERED (250-500ms pause)
-   └─> Native bridge converts strokes to ink data
-   └─> ML Kit Digital Ink processes locally
-   └─> Returns recognized text (e.g., "x + 5 = 12")
+2. MYSCRIPT RECOGNITION TRIGGERED (250-500ms pause)
+   └─> myScriptClient.ts converts strokes to JSON format
+   └─> MyScript Cloud API processes remotely (requires internet)
+   └─> Returns LaTeX and plain text (e.g., "x + 5 = 12")
    └─> recognitionUtils.ts segments into steps
    └─> canvasStore updated with recognized text
 
-3. MATH VALIDATION VIA CAMERAMATH
-   └─> Recognized text sent to CameraMath API
+3. MATH VALIDATION VIA UPSTUDY API
+   └─> Recognized text sent to UpStudy API
    └─> API returns: correctness, next steps, solution path
    └─> mathValidation.ts determines usefulness
    └─> Validation cached in MMKV (avoid repeat calls)
@@ -149,13 +149,13 @@ Components: HandwritingCanvas.tsx, ColorPicker.tsx, ToolBar.tsx
 Stores: canvasStore (initial - stroke management)
 ```
 
-### PR3: Recognition - ML & Native Bridge Layer
+### PR3: Recognition - MyScript Cloud API Integration
 ```
-ML & Native Layer
-├── Native Bridge (Android & iOS)
-│   └── ML Kit Digital Ink Recognition SDK
-│   └── Stroke-to-ink data conversion
-│   └── Confidence scoring
+MyScript Cloud API Layer
+├── MyScript Client (app/utils/myScriptClient.ts)
+│   └── REST API integration
+│   └── Stroke-to-JSON conversion
+│   └── LaTeX and plain text output
 ├── Recognition Utils
 │   └── Line segmentation logic
 │   └── Stroke filtering
@@ -197,7 +197,7 @@ Data: problemData.ts (hardcoded library)
 ### PR5: Validation - Logic & API Layer
 ```
 Logic & API Layer
-├── CameraMath API Integration
+├── UpStudy API Integration
 │   └── API client with error handling
 │   └── Request/response parsing
 │   └── Rate limiting (max 1 per 500ms)
@@ -403,8 +403,8 @@ Knowledge Base Layer
 │   ├── ARCHITECTURE.md - System design, data flows
 │   ├── SETUP.md - Development environment setup
 │   ├── FILE_STRUCTURE.md - Project organization
-│   ├── API_INTEGRATION.md - CameraMath API usage
-│   ├── MLKIT_SETUP.md - ML Kit configuration
+│   ├── UPSTUDY_API_INTEGRATION.md - UpStudy API usage
+│   ├── MYSCRIPT_SETUP.md - MyScript Cloud API configuration
 │   ├── STATE_MANAGEMENT.md - Zustand patterns
 │   └── DEPLOYMENT.md - Build and release process
 ├── Main README.md
@@ -450,7 +450,7 @@ interface Attempt {
 interface Step {
   id: string;
   strokeData: Stroke[]; // Raw ink points
-  recognizedText: string; // ML Kit output
+  recognizedText: string; // MyScript output
   color: string;
   timestamp: number;
 }

@@ -55,17 +55,22 @@ export const ManualInputFallback: React.FC<ManualInputFallbackProps> = ({
     }
   }, [visible, initialValue]);
 
-  const handleSubmit = () => {
+  // Memoize handlers to prevent unnecessary re-renders
+  const handleChangeText = React.useCallback((text: string) => {
+    setInput(text);
+  }, []);
+
+  const handleSubmit = React.useCallback(() => {
     if (input.trim()) {
       onSubmit(input.trim());
       setInput('');
     }
-  };
+  }, [input, onSubmit]);
 
-  const handleCancel = () => {
+  const handleCancel = React.useCallback(() => {
     setInput('');
     onCancel();
-  };
+  }, [onCancel]);
 
   return (
     <Modal
@@ -93,7 +98,7 @@ export const ManualInputFallback: React.FC<ManualInputFallbackProps> = ({
           <TextInput
             style={styles.input}
             value={input}
-            onChangeText={setInput}
+            onChangeText={handleChangeText}
             placeholder={placeholder}
             placeholderTextColor={Colors.text.tertiary}
             autoFocus
@@ -101,6 +106,7 @@ export const ManualInputFallback: React.FC<ManualInputFallbackProps> = ({
             numberOfLines={3}
             returnKeyType="done"
             onSubmitEditing={handleSubmit}
+            keyboardShouldPersistTaps="handled"
             accessibilityLabel="Math expression input"
             accessibilityHint="Enter your math expression manually"
           />

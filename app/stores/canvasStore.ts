@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { Stroke, DrawingTool, CANVAS_COLORS, InputDevice } from '../types/Canvas';
 import { RecognitionResult, RecognitionStatus } from '../types/MyScript';
+import { getLineNumberFromStrokes } from '../utils/lineDetectionUtils';
 
 /**
  * Performance limits to prevent unbounded memory growth
@@ -43,6 +44,7 @@ interface CanvasStoreState {
   setCurrentStroke: (stroke: Stroke | null) => void;
   clearStrokes: () => void;
   undoLastStroke: () => void;
+  undoLastLine: () => void;
   setSelectedColor: (color: string) => void;
   setSelectedTool: (tool: DrawingTool) => void;
   setIsDrawing: (isDrawing: boolean) => void;
@@ -123,6 +125,45 @@ export const useCanvasStore = create<CanvasStoreState>((set, get) => ({
       strokes: state.strokes.slice(0, -1),
       recognitionResult: null, // Clear recognition when undoing
     })),
+
+  // Remove the last contiguous group of strokes that belong to the same line
+  undoLastLine: () =>
+    set(state => {
+      if (state.strokes.length === 0) return state;
+
+      const strokes = [...state.strokes];
+      const lastIndex = strokes.length - 1;
+      const lastLine = getLineNumberFromStrokes([strokes[lastIndex]]);
+
+      if (lastLine === null) {
+        // Fallback to single-stroke undo
+        return {
+          strokes: strokes.slice(0, -1),
+          recognitionResult: null,
+        };
+      }
+
+      // Walk backward removing strokes that share the same detected line
+      let cutIndex = lastIndex;
+      for (let i = lastIndex; i >= 0; i--) {
+        const line = getLineNumberFromStrokes([strokes[i]]);
+        if (line !== lastLine) {
+          // Stop once line changes; keep up to i
+          cutIndex = i;
+          break;
+        }
+        // If reached the beginning and still matching, set -1 to remove from 0
+        if (i === 0) {
+          cutIndex = -1;
+        }
+      }
+
+      const newStrokes = strokes.slice(0, cutIndex + 1);
+      return {
+        strokes: newStrokes,
+        recognitionResult: null,
+      };
+    }),
 
   setSelectedColor: (color: string) =>
     set({ selectedColor: color }),

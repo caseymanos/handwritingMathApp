@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Handwriting Math App - A React Native tablet application that enables students to solve math problems through handwriting input with real-time step-by-step validation and intelligent tutoring. Students write solutions line-by-line on a digital canvas and receive immediate feedback on correctness and usefulness of each step.
 
-**Target Devices:** iPad 9th gen+, Samsung Galaxy Tab S9+ (8-10" tablets with optional stylus support)
+**Target Devices:** iPad 9th gen+, iPad Pro (8-10" tablets with Apple Pencil support) - Android descoped for MVP
 
 ## Technology Stack
 
@@ -18,14 +18,14 @@ Handwriting Math App - A React Native tablet application that enables students t
 ### Key Libraries
 - **@shopify/react-native-skia** - Hardware-accelerated canvas rendering (120 FPS capable)
 - **react-native-gesture-handler** - Stylus/touch input handling with pressure sensitivity
-- **Google ML Kit Digital Ink Recognition** - Offline handwriting recognition via native bridge
+- **MyScript Cloud API** - Cloud-based handwriting recognition (requires internet connection)
 - **react-native-mmkv** - Local storage (20x faster than AsyncStorage, synchronous API, encrypted)
 - **Zustand** - State management (10x better performance than Context API)
 - **react-native-katex** - LaTeX rendering for math notation
 - **React Native Reanimated 3** - UI thread animations (60+ FPS guaranteed)
 - **react-native-skottie** - GPU-accelerated Lottie animations
 - **React Navigation 7** - App navigation
-- **CameraMath API** - Math validation (MVP), plan Wolfram Alpha upgrade
+- **UpStudy API** - Math validation (formerly CameraMath), plan Wolfram Alpha upgrade
 - **@sentry/react-native** - Error tracking and performance monitoring
 
 ## Development Commands
@@ -105,11 +105,11 @@ User Input (Stylus/Touch)
   ↓ [react-native-gesture-handler]
 Skia Canvas (120 FPS)
   ↓ [250-500ms pause detection]
-ML Kit Digital Ink Recognition (offline)
+MyScript Cloud API Recognition (requires internet)
   ↓
 Recognized text
   ↓ [debounced, cached via MMKV]
-CameraMath API Validation
+UpStudy API Validation
   ↓
 Validation result (correct? useful?)
   ↓ [Zustand state update]
@@ -131,9 +131,7 @@ Result persisted to MMKV
   /assets          # Images, Lottie animations, icons
   /styles          # Theme, colors, spacing
 
-/native-modules    # Native bridge code for ML Kit
-  MLKitBridge.kt   # Android
-  MLKitBridge.swift # iOS
+/native-modules    # Empty (ML Kit native bridge descoped - using MyScript Cloud API)
 
 /hint-library      # Hint data and mapping logic
 
@@ -173,7 +171,7 @@ interface Attempt {
 interface Step {
   id: string;
   strokeData: Stroke[];  // Raw ink points
-  recognizedText: string; // ML Kit output
+  recognizedText: string; // MyScript output
   color: string;
   timestamp: number;
 }
@@ -260,12 +258,12 @@ interface ExpectedStep {
 - Show hints on: incorrect step, repeated errors, or 10s inactivity
 - Track escalation level per attempt
 
-### Native Bridge (ML Kit)
-- Android: `native-modules/MLKitBridge.kt`
-- iOS: `native-modules/MLKitBridge.swift`
-- Converts strokes (x, y, pressure, time) to ML Kit ink format
-- Returns recognized text with confidence score (target: >85%)
-- Works 100% offline after model download (~5MB)
+### MyScript Cloud API Integration
+- **No native bridge required** - REST API integration via `app/utils/myScriptClient.ts`
+- Converts strokes (x, y, pressure, time) to MyScript ink format (JSON)
+- Returns LaTeX and plain text with confidence score (target: >85%)
+- **Requires internet connection** - Cloud-based recognition service
+- See `docs/MYSCRIPT_SETUP.md` for API key setup
 
 ## Development Guidelines
 
@@ -287,26 +285,27 @@ interface ExpectedStep {
 - **Component tests** - User interactions, rendering, accessibility
 - **E2E tests** - Complete workflows (draw → validate → hint)
 - Target: 70%+ coverage for critical paths
-- Mock API calls, never hit real CameraMath in tests
+- Mock API calls, never hit real UpStudy or MyScript APIs in tests
 
 ### Performance
-- Profile on actual target devices (iPad 9th gen, Samsung Tab S9) regularly
+- Profile on actual target devices (iPad 9th gen, iPad Pro) regularly
 - Use Sentry performance monitoring to track validation response times
 - Keep canvas rendering at 60+ FPS minimum
 - Validation response target: <2 seconds end-to-end
 
 ### API Usage
-- CameraMath: MVP testing ($10 credit = ~6,000 calls)
-- Implement rate limiting and backoff strategy
+- UpStudy API: Math validation (contact team for pricing)
+- MyScript Cloud API: Handwriting recognition (see docs/MYSCRIPT_SETUP.md for pricing)
+- Implement rate limiting and backoff strategy for both APIs
 - Monitor costs via Sentry custom events
-- Plan Wolfram Alpha migration for production
+- Plan Wolfram Alpha migration for production validation
 
 ## PR Development Workflow
 
 This project follows a structured 11-PR workflow (see TASK_LIST.md):
 - **PR1** - Project setup & configuration
 - **PR2** - Canvas & handwriting input
-- **PR3** - ML Kit recognition bridge
+- **PR3** - MyScript Cloud API recognition
 - **PR4** - Problem display & math rendering
 - **PR5** - Math validation & API integration
 - **PR6** - Hint system
@@ -320,7 +319,7 @@ Each PR should:
 - Reference the task list in description
 - List all files created/modified/deleted
 - Include tests for new functionality
-- Be tested on both iOS and Android
+- Be tested on iOS (Android descoped for MVP)
 - Update ARCHITECTURE.md if adding new patterns
 
 ## Common Issues & Solutions
@@ -330,15 +329,15 @@ Each PR should:
 - **Solution:** Ensure using Skia (not SVG), limit canvas resolution, use path-based rendering
 
 ### Recognition Accuracy
-- **Issue:** ML Kit < 85% accuracy
-- **Solution:** Test with real handwriting samples, adjust confidence threshold, add manual fallback
+- **Issue:** MyScript recognition < 85% accuracy
+- **Solution:** Test with real handwriting samples, adjust confidence threshold, add manual fallback, ensure proper stroke formatting
 
 ### State Sync Issues
 - **Issue:** Canvas state not persisting
 - **Solution:** Check MMKV middleware configuration, ensure Zustand store uses persistence
 
 ### API Rate Limits
-- **Issue:** CameraMath rate limiting
+- **Issue:** UpStudy API rate limiting
 - **Solution:** Check debouncing (500ms min), verify cache hits in MMKV, implement backoff
 
 ### Stylus vs Touch
@@ -351,7 +350,7 @@ Each PR should:
 - **Test on physical devices** - Simulators don't accurately reflect stylus behavior
 - **MMKV over AsyncStorage** - 20x performance improvement, always use MMKV
 - **Zustand over Context** - 10x better performance, already decided
-- **ML Kit is offline** - No internet required for recognition after model download
+- **MyScript requires internet** - Cloud-based recognition service, ensure network connectivity
 - **Hint quality > quantity** - Progressive hints that teach, never reveal full answers
 - **Target: Paper-like experience** - Smooth, responsive, natural handwriting feel
 
@@ -360,8 +359,8 @@ Each PR should:
 - **PRD:** See `PRD-Updated-2025 (1).md` for full requirements
 - **Architecture:** See `ARCHITECTURE.md` for detailed system design and data flows
 - **Task List:** See `TASK_LIST.md` for PR-by-PR development roadmap
-- **CameraMath API:** Documentation at [CameraMath API docs]
-- **ML Kit Digital Ink:** [Google ML Kit docs](https://developers.google.com/ml-kit/vision/digital-ink-recognition)
+- **UpStudy API:** Contact team for API documentation and credentials
+- **MyScript Cloud API:** [MyScript Developer Portal](https://developer.myscript.com)
 - **Skia:** [react-native-skia docs](https://shopify.github.io/react-native-skia/)
 
 ## Contact

@@ -79,6 +79,9 @@ interface UIStoreState {
   // Line guides toggle
   showLineGuides: boolean;
 
+  // Hint overlay collapsed state
+  hintCollapsed: boolean;
+
   // Keyboard state (for mobile devices)
   keyboardVisible: boolean;
   keyboardHeight: number;
@@ -118,6 +121,10 @@ interface UIStoreState {
   toggleLineGuides: () => void;
   setLineGuides: (show: boolean) => void;
 
+  // Actions: Hint overlay
+  setHintCollapsed: (collapsed: boolean) => void;
+  toggleHintCollapsed: () => void;
+
   // Actions: Keyboard
   setKeyboardVisible: (visible: boolean, height?: number) => void;
 
@@ -151,6 +158,7 @@ const initialState = {
   toolbarVisible: true,
   toolbarPosition: ToolbarPosition.MIDDLE_LEFT,
   showLineGuides: true,
+  hintCollapsed: false,
   keyboardVisible: false,
   keyboardHeight: 0,
 };
@@ -348,6 +356,15 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
 
   setLineGuides: (show: boolean) => {
     set({ showLineGuides: show });
+  },
+
+  // Hint overlay actions
+  setHintCollapsed: (collapsed: boolean) => {
+    set({ hintCollapsed: collapsed });
+  },
+
+  toggleHintCollapsed: () => {
+    set(state => ({ hintCollapsed: !state.hintCollapsed }));
   },
 
   // Keyboard actions

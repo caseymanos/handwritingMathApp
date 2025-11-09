@@ -1,174 +1,222 @@
 /**
  * Tutorial Types
  *
- * Type definitions for Direct Instruction tutorial mode (PR14).
- * Supports video lessons, progress tracking, and prerequisite unlocking.
+ * Type definitions for tutorial lessons, progress tracking, and video playback.
+ * Used for Tutorial Mode (PR14).
  */
 
 import { ProblemCategory, ProblemDifficulty } from './Problem';
 
+// Re-export for convenience
+export { ProblemCategory, ProblemDifficulty };
+
 /**
- * Tutorial content types
+ * Content type for lessons
  */
 export enum TutorialContentType {
   VIDEO = 'video',
-  INTERACTIVE = 'interactive', // Future: code-based diagrams
-  TEXT = 'text', // Future: article-style lessons
+  INTERACTIVE = 'interactive',
+  TEXT = 'text',
 }
 
 /**
- * Video platform types
+ * Video platform for hosting
  */
 export enum VideoPlatform {
   YOUTUBE = 'youtube',
-  CLOUDFLARE = 'cloudflare', // Future
-  CUSTOM = 'custom', // Future
+  CLOUDFLARE = 'cloudflare',
+  CUSTOM = 'custom',
 }
 
 /**
- * Tutorial lesson metadata
+ * Lesson completion status
  */
-export interface TutorialLesson {
-  id: string;
-  slug: string; // URL-friendly identifier (e.g., "linear-equations-intro")
-  title: string;
-  description: string | null;
-  skillCategory: ProblemCategory; // Maps to problem categories
-  difficulty: ProblemDifficulty;
-  contentType: TutorialContentType;
-  videoUrl: string | null; // YouTube URL or other platform
-  videoPlatform: VideoPlatform;
-  durationSeconds: number | null;
-  transcript: string | null; // Full transcript for accessibility
-  interactiveContent: Record<string, any> | null; // Future: interactive elements
-  sortOrder: number; // Display order within category
-  prerequisites: string[]; // Array of lesson slugs required before this one
-  tags: string[]; // For search and categorization
-  thumbnailUrl: string | null;
-  createdAt: number;
-  updatedAt: number;
-  published: boolean;
-}
-
-/**
- * Lesson progress status
- */
-export enum LessonProgressStatus {
+export enum TutorialLessonStatus {
   NOT_STARTED = 'not_started',
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
 }
 
 /**
- * User progress for a single lesson
+ * Tutorial lesson metadata
  */
-export interface TutorialProgress {
+export interface TutorialLesson {
+  /** Unique lesson ID */
   id: string;
-  userId: string;
-  lessonId: string;
-  status: LessonProgressStatus;
-  progressPercent: number; // 0-100
-  videoPositionSeconds: number; // Resume position
-  startedAt: number | null;
-  completedAt: number | null;
-  timeSpentSeconds: number; // Total watch time
-  lastWatchedAt: number | null;
+
+  /** URL-friendly slug (e.g., "linear-equations-intro") */
+  slug: string;
+
+  /** Lesson title */
+  title: string;
+
+  /** Description/summary */
+  description: string | null;
+
+  /** Skill category this lesson teaches */
+  skillCategory: ProblemCategory;
+
+  /** Difficulty level */
+  difficulty: ProblemDifficulty;
+
+  /** Content type */
+  contentType: TutorialContentType;
+
+  /** Video URL (YouTube URL or custom) */
+  videoUrl: string;
+
+  /** Video platform */
+  videoPlatform: VideoPlatform;
+
+  /** Duration in seconds */
+  durationSeconds: number | null;
+
+  /** Full transcript for accessibility */
+  transcript: string | null;
+
+  /** Interactive content (for future use) */
+  interactiveContent: any | null;
+
+  /** Display order within category */
+  sortOrder: number;
+
+  /** Prerequisites (array of lesson slugs) */
+  prerequisites: string[];
+
+  /** Tags for search/filtering */
+  tags: string[];
+
+  /** Thumbnail URL */
+  thumbnailUrl: string | null;
+
+  /** Is published? */
+  published: boolean;
+
+  /** Created timestamp */
   createdAt: number;
+
+  /** Updated timestamp */
   updatedAt: number;
 }
 
 /**
- * Lesson prerequisite relationship
+ * User progress for a lesson
  */
-export interface LessonPrerequisite {
-  lessonId: string;
-  prerequisiteSlug: string;
-  isCompleted: boolean;
-}
+export interface TutorialProgress {
+  /** Unique progress ID */
+  id: string;
 
-/**
- * Video player state
- */
-export interface VideoPlayerState {
-  isPlaying: boolean;
-  currentTime: number;
-  duration: number;
-  playbackRate: number; // 0.5, 1.0, 1.5, 2.0
-  volume: number; // 0-1
-  isMuted: boolean;
-  isFullscreen: boolean;
-}
-
-/**
- * Lesson completion criteria
- */
-export interface CompletionCriteria {
-  minWatchPercent: number; // Default: 80%
-  allowSkipping: boolean; // Default: true for MVP
-  requireQuiz: boolean; // Future: false for MVP
-}
-
-/**
- * Tutorial category with lessons
- */
-export interface LessonCategory {
-  category: ProblemCategory;
-  displayName: string;
-  description: string;
-  lessons: TutorialLesson[];
-  totalLessons: number;
-  completedLessons: number;
-  completionPercent: number;
-}
-
-/**
- * Tutorial store state (for tutorialStore.ts)
- */
-export interface TutorialStoreState {
-  // Lesson library
-  lessons: TutorialLesson[];
-  lessonsLoading: boolean;
-  lessonsError: string | null;
-
-  // User progress
-  progress: Map<string, TutorialProgress>; // lessonId -> progress
-
-  // Current lesson
-  currentLesson: TutorialLesson | null;
-  videoPlayerState: VideoPlayerState;
-
-  // Filtering and search
-  selectedCategory: ProblemCategory | null;
-  searchQuery: string;
-
-  // Actions (to be implemented in store)
-  fetchLessons: () => Promise<void>;
-  fetchProgress: () => Promise<void>;
-  startLesson: (lessonId: string) => void;
-  updateVideoPosition: (seconds: number) => void;
-  completeLesson: (lessonId: string) => Promise<void>;
-  isLessonUnlocked: (lessonId: string) => boolean;
-  getUnlockedProblems: (category: ProblemCategory) => string[];
-}
-
-/**
- * Lesson unlock rules
- */
-export interface UnlockRules {
-  category: ProblemCategory;
-  difficulty: ProblemDifficulty;
-  requiredCompletedLessons: number; // How many lessons in category must be complete
-}
-
-/**
- * Tutorial sync payload (for cloud storage)
- */
-export interface TutorialProgressSyncPayload {
+  /** User ID */
   userId: string;
+
+  /** Lesson ID */
   lessonId: string;
-  status: LessonProgressStatus;
+
+  /** Completion status */
+  status: TutorialLessonStatus;
+
+  /** Progress percentage (0-100) */
   progressPercent: number;
+
+  /** Video position for resume (seconds) */
   videoPositionSeconds: number;
+
+  /** When lesson was started */
+  startedAt: number | null;
+
+  /** When lesson was completed */
+  completedAt: number | null;
+
+  /** Total time spent (seconds) */
   timeSpentSeconds: number;
-  lastWatchedAt: number;
+
+  /** Last watched timestamp */
+  lastWatchedAt: number | null;
+
+  /** Created timestamp */
+  createdAt: number;
+
+  /** Updated timestamp */
+  updatedAt: number;
+}
+
+/**
+ * Tutorial session (for analytics)
+ */
+export interface TutorialSession {
+  /** Session ID */
+  id: string;
+
+  /** User ID */
+  userId: string;
+
+  /** Lesson ID */
+  lessonId: string;
+
+  /** Session start time */
+  startedAt: number;
+
+  /** Session end time */
+  endedAt: number | null;
+
+  /** Watch time in this session (seconds) */
+  watchTimeSeconds: number;
+
+  /** Video position at session start */
+  startPosition: number;
+
+  /** Video position at session end */
+  endPosition: number | null;
+
+  /** Did user complete lesson in this session? */
+  completed: boolean;
+}
+
+/**
+ * Category progress summary
+ */
+export interface CategoryProgress {
+  /** Category */
+  category: ProblemCategory;
+
+  /** Total lessons in category */
+  totalLessons: number;
+
+  /** Completed lessons */
+  completedLessons: number;
+
+  /** In-progress lessons */
+  inProgressLessons: number;
+
+  /** Completion percentage */
+  completionPercent: number;
+
+  /** Total watch time (seconds) */
+  totalWatchTime: number;
+}
+
+/**
+ * Overall tutorial progress
+ */
+export interface OverallTutorialProgress {
+  /** Total lessons */
+  totalLessons: number;
+
+  /** Completed lessons */
+  completedLessons: number;
+
+  /** In-progress lessons */
+  inProgressLessons: number;
+
+  /** Completion percentage */
+  completionPercent: number;
+
+  /** Total watch time (seconds) */
+  totalWatchTime: number;
+
+  /** Progress by category */
+  byCategory: Record<ProblemCategory, CategoryProgress>;
+
+  /** Last activity timestamp */
+  lastActivity: number | null;
 }
