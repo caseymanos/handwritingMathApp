@@ -145,7 +145,7 @@ INSERT INTO public.tutorial_lessons (
   ARRAY['linear-equations-multi-step']::TEXT[],
   ARRAY['word problems', 'application', 'real-world', 'problem solving'],
   true
-);
+),
 
 -- ============================================================================
 -- BASIC ALGEBRA LESSONS (7 lessons: 2 EASY, 3 MEDIUM, 2 HARD)
@@ -379,7 +379,7 @@ INSERT INTO public.tutorial_lessons (
   'QUADRATIC',
   'HARD',
   'video',
-  'https://www.youtube.com/watch?v=1W_nfr3RYkc', -- Math with Mr. J: The Discriminant (8 min)
+  'https://www.youtube.com/watch?v=SKvaW5t-yKw', -- Math with Mr. J: The Discriminant (8 min)
   'youtube',
   480,
   'Explains how the discriminant determines whether a quadratic has two real solutions, one real solution, or two complex solutions. Connects to the graph of the parabola.',
