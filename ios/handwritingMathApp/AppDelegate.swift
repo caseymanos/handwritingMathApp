@@ -24,4 +24,26 @@ class AppDelegate: EXAppDelegateWrapper {
     }
     return .allButUpsideDown
   }
+
+  // MARK: - UISceneSession Lifecycle
+
+  override func application(
+    _ application: UIApplication,
+    configurationForConnecting connectingSceneSession: UISceneSession,
+    options: UIScene.ConnectionOptions
+  ) -> UISceneConfiguration {
+    let configuration = UISceneConfiguration(
+      name: "Default Configuration",
+      sessionRole: connectingSceneSession.role
+    )
+    configuration.delegateClass = RCTAppDelegate.self
+    return configuration
+  }
+
+  override func application(
+    _ application: UIApplication,
+    didDiscardSceneSessions sceneSessions: Set<UISceneSession>
+  ) {
+    // Called when the user discards a scene session
+  }
 }
