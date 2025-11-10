@@ -215,14 +215,17 @@ prerequisites = ARRAY[]::TEXT[]
 | Quadratic | `QUADRATIC` | Quadratic equations, factoring, quadratic formula |
 | Geometry | `GEOMETRY` | Shapes, area, perimeter, Pythagorean theorem |
 
-### Recommended Lesson Counts
+### Current Lesson Counts (As of 2025-11-10)
 
-| Category | Easy | Medium | Hard | Total |
-|----------|------|--------|------|-------|
-| Linear Equations | 2 | 2 | 2 | 6 |
-| Basic Algebra | 2 | 3 | 2 | 7 |
-| Quadratic | 1 | 3 | 3 | 7 |
-| Geometry | 2 | 2 | 2 | 6 |
+| Category | Easy | Medium | Hard | Total | Status |
+|----------|------|--------|------|-------|--------|
+| Linear Equations | 2 | 2 | 2 | 6 | ✅ Complete |
+| Basic Algebra | 2 | 3 | 2 | 7 | ✅ Complete |
+| Quadratic | 1 | 3 | 3 | 7 | ✅ Complete |
+| Geometry | 2 | 2 | 2 | 6 | ✅ Complete |
+| **TOTAL** | **7** | **10** | **9** | **26** | **100%** |
+
+**Note**: All 26 lessons have been created with curated YouTube videos from verified educational channels. See `TUTORIAL_LESSONS_REFERENCE.md` for complete lesson details.
 
 ### Problem Unlocking Rules
 
@@ -326,6 +329,16 @@ INSERT INTO public.tutorial_lessons (
   true
 );
 ```
+
+---
+
+## Related Documentation
+
+- **Complete Lesson Catalog**: See `TUTORIAL_LESSONS_REFERENCE.md` for detailed information on all 26 lessons
+- **Implementation Plan**: See `IMPLEMENTATION_PLAN_TUTORIAL_MODE.md` for technical architecture
+- **Database Schema**: See `DB_SCHEMA_EXTENSIONS.sql` for database structure
+- **Seed Data**: See `scripts/seed-tutorial-lessons.sql` to populate lessons
+- **Type Definitions**: See `app/types/Tutorial.ts` for TypeScript types
 
 ---
 
