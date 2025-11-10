@@ -73,14 +73,30 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
       {/* Learn Section - Tutorial Mode (PR14) */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Learn</Text>
+        <Text style={styles.sectionTitle}>Learn with Tutorials</Text>
 
         <TouchableOpacity
-          style={[styles.button, styles.secondaryButton]}
+          style={[styles.button, styles.tutorialButton, styles.tutorialEasy]}
           onPress={() => navigation.navigate('TrainingMode', { problemId: 'le_easy_01' })}
         >
-          <Text style={styles.secondaryButtonText}>📚 Start Tutorial</Text>
-          <Text style={styles.buttonSubtext}>Learn with a simple equation (x + 5 = 12)</Text>
+          <Text style={styles.tutorialButtonText}>📚 Beginner Tutorial</Text>
+          <Text style={styles.tutorialDescription}>One-step equations (x + 5 = 12)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.tutorialButton, styles.tutorialMedium]}
+          onPress={() => navigation.navigate('TrainingMode', { problemId: 'le_medium_01' })}
+        >
+          <Text style={styles.tutorialButtonText}>📚 Intermediate Tutorial</Text>
+          <Text style={styles.tutorialDescription}>Two-step equations (2x + 3 = 11)</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.tutorialButton, styles.tutorialHard]}
+          onPress={() => navigation.navigate('TrainingMode', { problemId: 'le_hard_01' })}
+        >
+          <Text style={styles.tutorialButtonText}>📚 Advanced Tutorial</Text>
+          <Text style={styles.tutorialDescription}>Variables both sides (3x + 7 = 2x + 15)</Text>
         </TouchableOpacity>
       </View>
 
@@ -202,5 +218,34 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#007AFF',
+  },
+  tutorialButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  tutorialEasy: {
+    borderColor: '#34C759',
+  },
+  tutorialMedium: {
+    borderColor: '#FF9500',
+  },
+  tutorialHard: {
+    borderColor: '#FF3B30',
+  },
+  tutorialButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1D1D1F',
+    marginBottom: 4,
+  },
+  tutorialDescription: {
+    fontSize: 14,
+    color: '#6E6E73',
+    textAlign: 'center',
   },
 });
