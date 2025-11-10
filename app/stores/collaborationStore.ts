@@ -16,6 +16,7 @@ import {
   SessionStatus,
   LinkStatus,
   CollaborationStoreState,
+  ProblemChangePayload,
 } from '../types/Collaboration';
 import { Stroke, CANVAS_COLORS } from '../types/Canvas';
 import {
@@ -154,6 +155,7 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
         linkId: link.id,
         attemptId: null,
         status: SessionStatus.ACTIVE,
+        currentProblemId: null,
         startedAt: now,
         endedAt: null,
         studentLastSeen: now,
@@ -310,6 +312,79 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
       }
 
       set({ peerCursors: newCursors });
+    });
+  },
+
+  /**
+   * Broadcast problem change to the active session
+   * This will update the session's current problem and trigger canvas clearing on both sides
+   */
+  broadcastProblemChange: async (problemId: string) => {
+    const { activeSession } = get();
+    if (!activeSession) {
+      console.warn('[CollaborationStore] No active session, cannot broadcast problem change');
+      return;
+    }
+
+    try {
+      const user = await getCurrentUser();
+      if (!user) {
+        console.warn('[CollaborationStore] Not authenticated');
+        return;
+      }
+
+      addBreadcrumb('Broadcasting problem change', 'collaboration', {
+        sessionId: activeSession.id,
+        problemId,
+      });
+
+      // Update session with new problem ID
+      const updatedSession: CollaborationSession = {
+        ...activeSession,
+        currentProblemId: problemId,
+        updatedAt: Date.now(),
+      };
+
+      await upsertCollaborationSession(updatedSession);
+
+      // Update local state
+      set({ activeSession: updatedSession });
+
+      console.log('[CollaborationStore] Problem change broadcasted:', problemId);
+    } catch (error) {
+      console.error('[CollaborationStore] Failed to broadcast problem change:', error);
+      captureException(error as Error, {
+        sessionId: activeSession.id,
+        problemId,
+      });
+    }
+  },
+
+  /**
+   * Handle incoming problem change from peer
+   * This is called when the peer changes the problem via real-time subscription
+   */
+  handleProblemChange: (payload: ProblemChangePayload) => {
+    const { activeSession } = get();
+    if (!activeSession) {
+      console.warn('[CollaborationStore] No active session, ignoring problem change');
+      return;
+    }
+
+    console.log('[CollaborationStore] Handling problem change:', payload);
+
+    // Update local session state
+    const updatedSession: CollaborationSession = {
+      ...activeSession,
+      currentProblemId: payload.problemId,
+      updatedAt: payload.timestamp,
+    };
+
+    set({ activeSession: updatedSession });
+
+    addBreadcrumb('Problem changed by peer', 'collaboration', {
+      problemId: payload.problemId,
+      changedBy: payload.changedBy,
     });
   },
 

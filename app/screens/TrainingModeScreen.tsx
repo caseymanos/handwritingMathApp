@@ -39,6 +39,7 @@ import { useHintStore } from '../stores/hintStore';
 import { useProgressStore } from '../stores/progressStore';
 import { useCollaborationStore, selectPeerStrokes, selectIsInSession, selectLiveStrokes, selectBroadcastStroke } from '../stores/collaborationStore';
 import { useRealtimeCollaboration } from '../hooks/useRealtimeCollaboration';
+import { useProblemSync } from '../hooks/useProblemSync';
 import { getCurrentUser } from '../utils/sync/supabaseClient';
 import { RecognitionStatus, MyScriptEndpoint } from '../types/MyScript';
 import { getMyScriptClient } from '../utils/myScriptClient';
@@ -118,6 +119,44 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
 
   // Initialize realtime collaboration hook
   useRealtimeCollaboration();
+
+  // Initialize problem sync hook for collaborative problem changes
+  useProblemSync({
+    currentProblemId: currentProblem?.id || null,
+    onProblemChange: (problemId: string) => {
+      console.log('[TrainingModeScreen] Peer changed problem to:', problemId);
+      const problem = getProblemById(problemId);
+      if (problem) {
+        // End current attempt as incomplete
+        try {
+          const state = useProgressStore.getState?.();
+          if (state?.currentAttempt) {
+            state.endAttempt(false);
+          }
+        } catch {}
+
+        // Update to the new problem
+        setCurrentProblem(problem);
+        console.log('[TrainingModeScreen] Problem synced from peer:', problem.id);
+      } else {
+        console.warn('[TrainingModeScreen] Problem not found:', problemId);
+      }
+    },
+    onCanvasClear: () => {
+      console.log('[TrainingModeScreen] Canvas cleared due to peer problem change');
+      // Clear any pending auto-validation timer
+      if (autoValidationTimerRef.current) {
+        clearTimeout(autoValidationTimerRef.current);
+        autoValidationTimerRef.current = null;
+      }
+      // Clear local state
+      setStrokeCount(0);
+      setStepResults([]);
+      clearRecognitionHistory();
+      clearHint();
+      setRecognitionResult(null);
+    },
+  });
 
   // Track step start time for attempt tracking
   const [stepStartTime, setStepStartTime] = useState<number | null>(null);

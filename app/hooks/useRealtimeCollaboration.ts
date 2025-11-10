@@ -79,6 +79,20 @@ export function useRealtimeCollaboration() {
         }
       );
 
+      // Subscribe to collaboration_sessions UPDATE events (for problem changes)
+      channel.on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'collaboration_sessions',
+          filter: `id=eq.${activeSession.id}`,
+        },
+        (payload) => {
+          handleSessionUpdate(payload.new, user.id);
+        }
+      );
+
       // Subscribe to presence (online/offline tracking)
       channel
         .on('presence', { event: 'sync' }, () => {
@@ -199,6 +213,52 @@ export function useRealtimeCollaboration() {
       console.log('[RealtimeCollaboration] Incoming stroke:', liveStroke.id);
     } catch (error) {
       console.error('[RealtimeCollaboration] Failed to handle incoming stroke:', error);
+      captureException(error as Error);
+    }
+  }
+
+  /**
+   * Handle session update (e.g., problem changes)
+   */
+  function handleSessionUpdate(row: any, currentUserId: string) {
+    try {
+      const currentSession = useCollaborationStore.getState().activeSession;
+      if (!currentSession) return;
+
+      const updatedProblemId = row.current_problem_id;
+      const previousProblemId = currentSession.currentProblemId;
+
+      // Check if problem changed
+      if (updatedProblemId !== previousProblemId && updatedProblemId) {
+        console.log('[RealtimeCollaboration] Problem changed to:', updatedProblemId);
+
+        // Update session in store
+        const updatedSession = {
+          ...currentSession,
+          currentProblemId: updatedProblemId,
+          updatedAt: new Date(row.updated_at).getTime(),
+        };
+
+        useCollaborationStore.setState({ activeSession: updatedSession });
+
+        // Call the handleProblemChange method from the store
+        const { handleProblemChange } = useCollaborationStore.getState();
+        handleProblemChange({
+          problemId: updatedProblemId,
+          changedBy: row.student_last_seen > row.teacher_last_seen
+            ? row.student_id
+            : row.teacher_id,
+          timestamp: new Date(row.updated_at).getTime(),
+          shouldClearCanvas: true,
+        });
+
+        addBreadcrumb('Problem changed via realtime', 'collaboration', {
+          problemId: updatedProblemId,
+          sessionId: row.id,
+        });
+      }
+    } catch (error) {
+      console.error('[RealtimeCollaboration] Failed to handle session update:', error);
       captureException(error as Error);
     }
   }
