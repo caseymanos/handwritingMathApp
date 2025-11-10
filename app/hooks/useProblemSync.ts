@@ -31,6 +31,7 @@ export const useProblemSync = ({
 }: UseProblemSyncOptions) => {
   const activeSession = useCollaborationStore(state => state.activeSession);
   const broadcastProblemChange = useCollaborationStore(state => state.broadcastProblemChange);
+  const clearLiveStrokes = useCollaborationStore(state => state.clearLiveStrokes);
   const clearStrokes = useCanvasStore(state => state.clearStrokes);
 
   // Track the previous problem ID to detect changes
@@ -103,8 +104,11 @@ export const useProblemSync = ({
     try {
       console.log('[useProblemSync] Peer changed problem to:', newProblemId);
 
-      // Clear canvas on both sides
+      // Clear local canvas strokes
       clearStrokes();
+
+      // Clear peer's live strokes from collaboration store
+      clearLiveStrokes();
 
       // Call the local clear callback if provided
       if (onCanvasClear) {
@@ -135,6 +139,9 @@ export const useProblemSync = ({
 
       // Clear local canvas
       clearStrokes();
+
+      // Clear peer's live strokes from collaboration store
+      clearLiveStrokes();
 
       // Call the local clear callback if provided
       if (onCanvasClear) {

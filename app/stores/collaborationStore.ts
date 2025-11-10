@@ -389,6 +389,16 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
   },
 
   /**
+   * Clear all live strokes
+   * This is used when clearing the canvas during problem changes
+   */
+  clearLiveStrokes: () => {
+    console.log('[CollaborationStore] Clearing live strokes');
+    set({ liveStrokes: [] });
+    addBreadcrumb('Live strokes cleared', 'collaboration');
+  },
+
+  /**
    * Generate a new invite code (teacher-side)
    */
   generateInviteCode: async (): Promise<string> => {
