@@ -80,6 +80,15 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
   const [canvasKey, setCanvasKey] = useState(0);
   const isFocused = useIsFocused?.() ?? true;
 
+  // Debug: track peer stroke updates to verify realtime flow on device builds
+  useEffect(() => {
+    console.log('[HandwritingCanvas] peerStrokes updated:', peerStrokes.length);
+  }, [peerStrokes.length]);
+
+  useEffect(() => {
+    console.log('[HandwritingCanvas] local strokes count:', strokes.length);
+  }, [strokes.length]);
+
   // Force remount of Skia Canvas when app returns to foreground
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {

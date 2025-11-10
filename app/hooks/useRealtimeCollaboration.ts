@@ -100,7 +100,18 @@ export function useRealtimeCollaboration() {
       });
 
       // Subscribe to channel
-      channel.subscribe(async (status) => {
+      const handleChannelRestart = (reason: string) => {
+        console.warn(`[RealtimeCollaboration] Channel ${reason}:`, channelName);
+        addBreadcrumb(`Realtime channel ${reason}`, 'realtime', { channelName });
+        useCollaborationStore.setState({ realtimeChannel: null });
+        cleanup();
+        setTimeout(() => {
+          console.log(`[RealtimeCollaboration] Re-subscribing after ${reason}`);
+          subscribeToSession();
+        }, 2000);
+      };
+
+      channel.subscribe(async status => {
         if (status === 'SUBSCRIBED') {
           console.log('[RealtimeCollaboration] Subscribed to channel:', channelName);
 
@@ -127,12 +138,26 @@ export function useRealtimeCollaboration() {
               lastMessageAt: null,
             },
           });
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[RealtimeCollaboration] Channel error:', channelName);
-          captureException(new Error('Realtime channel error'), { channelName });
-        } else if (status === 'TIMED_OUT') {
+
+          return;
+        }
+
+        if (status === 'CLOSED') {
+          handleChannelRestart('closed');
+          return;
+        }
+
+        if (status === 'TIMED_OUT') {
           console.error('[RealtimeCollaboration] Channel timed out:', channelName);
           captureException(new Error('Realtime channel timeout'), { channelName });
+          handleChannelRestart('timed out');
+          return;
+        }
+
+        if (status === 'CHANNEL_ERROR') {
+          console.error('[RealtimeCollaboration] Channel error:', channelName);
+          captureException(new Error('Realtime channel error'), { channelName });
+          handleChannelRestart('error');
         }
       });
 
