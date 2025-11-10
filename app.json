@@ -38,7 +38,8 @@
             "newArchEnabled": true
           }
         }
-      ]
+      ],
+      "expo-updates"
     ],
     "extra": {
       "eas": {
