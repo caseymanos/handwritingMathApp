@@ -20,11 +20,13 @@ import {
   CANVAS_COLORS,
   CanvasColor,
 } from '../types/Canvas';
+import { LiveStroke } from '../types/Collaboration';
 import { useStylus } from '../hooks/useStylus';
 import { calculateStrokeWidth, getEraserWidth } from '../utils/pressureUtils';
 import { useCanvasStore } from '../stores/canvasStore';
 import { useRecognition } from '../hooks/useRecognition';
 import { Colors } from '../styles';
+import { genId } from '../utils/id';
 
 // Line guide configuration (must stay in sync with lineDetectionUtils)
 const LINE_GUIDE_SPACING = 60; // pixels between horizontal guides
@@ -36,6 +38,7 @@ interface HandwritingCanvasProps {
   selectedTool?: DrawingTool;
   showLineGuides?: boolean;
   enableRecognition?: boolean;
+  peerStrokes?: LiveStroke[]; // Strokes from collaborating peer
   onStrokeComplete?: (stroke: Stroke) => void;
   onStrokesChange?: (strokes: Stroke[]) => void;
   onRecognitionComplete?: (latex?: string) => void;
@@ -49,13 +52,15 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
   selectedTool = DrawingTool.PEN,
   showLineGuides = true,
   enableRecognition = true,
+  peerStrokes = [],
   onStrokeComplete,
   onStrokesChange,
   onRecognitionComplete,
 }) => {
-  // Use Zustand store for state management
-  const canvasStore = useCanvasStore();
-  const { strokes, addStroke, setCurrentStroke } = canvasStore;
+  // Use Zustand store with proper selectors to avoid unnecessary re-renders
+  const strokes = useCanvasStore(state => state.strokes);
+  const addStroke = useCanvasStore(state => state.addStroke);
+  const setCurrentStroke = useCanvasStore(state => state.setCurrentStroke);
 
   // Use local ref for active drawing stroke to avoid re-renders during pan gestures
   // This is the KEY optimization: no state updates = no re-renders during drawing
@@ -92,11 +97,6 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
     }
   }, [isFocused]);
 
-  // Debug: Log canvas dimensions
-  console.log('[HandwritingCanvas] Canvas dimensions:', screenWidth, 'x', screenHeight);
-  console.log('[HandwritingCanvas] Number of strokes:', strokes.length);
-  console.log('[HandwritingCanvas] Show line guides:', showLineGuides);
-
   // Generate line guides for the canvas (dynamic based on screen height)
   const lineGuides = useMemo(() => {
     if (!showLineGuides) return [];
@@ -105,7 +105,6 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
     for (let y = TOP_OFFSET; y < screenHeight; y += LINE_GUIDE_SPACING) {
       guides.push(y);
     }
-    console.log('[HandwritingCanvas] Generated', guides.length, 'line guides');
     return guides;
   }, [showLineGuides, screenHeight]);
 
@@ -132,7 +131,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
           : calculateStrokeWidth(pressure, deviceType);
 
       const newStroke: Stroke = {
-        id: `stroke-${Date.now()}-${Math.random()}`,
+        id: genId(),
         points: [point],
         color: selectedTool === DrawingTool.ERASER ? '#FFFFFF' : selectedColor,
         strokeWidth: Math.max(strokeWidth, 5), // Force minimum 5px width
@@ -295,6 +294,28 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
                     strokeCap="round"
                     strokeJoin="round"
                     opacity={1}
+                  />
+                );
+              })}
+            </Group>
+
+            {/* Render peer strokes (from collaborating teacher/student) */}
+            <Group>
+              {peerStrokes.map(liveStroke => {
+                const stroke = liveStroke.strokeData;
+                const path = createPathFromStroke(stroke);
+                if (!path) return null;
+
+                return (
+                  <Path
+                    key={liveStroke.id}
+                    path={path}
+                    color={liveStroke.color}
+                    style="stroke"
+                    strokeWidth={Math.max(liveStroke.strokeWidth, 3)}
+                    strokeCap="round"
+                    strokeJoin="round"
+                    opacity={liveStroke.isAnnotation ? 0.8 : 0.6} // Teacher annotations slightly more visible
                   />
                 );
               })}

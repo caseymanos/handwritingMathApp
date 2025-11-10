@@ -16,6 +16,7 @@
 
 import pako from 'pako';
 import { Stroke, StrokePoint } from '../../types/Canvas';
+import { genId } from '../id';
 
 /**
  * Quantization factor (1 decimal place precision)
@@ -127,8 +128,8 @@ export function deserializeStroke(
     // Decode delta encoding to absolute coordinates
     const absolutePoints = decodeDelta(points);
 
-    // Generate ID (will be overwritten by actual ID from database)
-    const id = `stroke_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    // Generate UUID (will be overwritten by actual ID from database)
+    const id = genId();
 
     return {
       id,

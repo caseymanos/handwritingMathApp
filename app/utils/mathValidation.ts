@@ -31,6 +31,7 @@ import {
   checkRateLimit,
 } from './apiConfig';
 import { getProblemById } from './problemData';
+import { genId } from './id';
 
 /**
  * Debouncing state for validation requests
@@ -39,10 +40,10 @@ let validationTimer: NodeJS.Timeout | null = null;
 let pendingValidation: Promise<ValidationResult> | null = null;
 
 /**
- * Generate unique validation ID
+ * Generate unique validation ID using UUID v4
  */
 function generateValidationId(): string {
-  return `validation_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return genId();
 }
 
 /**

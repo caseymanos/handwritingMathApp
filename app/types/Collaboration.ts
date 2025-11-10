@@ -34,7 +34,7 @@ export interface CollaborationPermissions {
 export interface TeacherStudentLink {
   id: string;
   teacherId: string;
-  studentId: string;
+  studentId: string | null; // null when status is PENDING, filled when student accepts
   inviteCode: string; // 6-character alphanumeric (e.g., ABC123)
   status: LinkStatus;
   permissions: CollaborationPermissions;

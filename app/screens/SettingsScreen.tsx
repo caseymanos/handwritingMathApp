@@ -19,7 +19,9 @@ import {
 import type { SettingsScreenProps } from '../navigation/types';
 import { useProgressStore } from '../stores/progressStore';
 import { useTutorialStore } from '../stores/tutorialStore';
+import { useCollaborationStore } from '../stores/collaborationStore';
 import { storage } from '../utils/storage';
+import { LinkStatus } from '../types/Collaboration';
 
 // App version (should match package.json in production)
 const APP_VERSION = '1.0.0';
@@ -38,6 +40,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const isAuthed = useTutorialStore(state => state.isAuthed);
   const cloudEnabled = useTutorialStore(state => state.cloudEnabled);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  // Collaboration store
+  const linkedTeachers = useCollaborationStore(state => state.linkedTeachers);
+  const linkedStudents = useCollaborationStore(state => state.linkedStudents);
+  const revokeLink = useCollaborationStore(state => state.revokeLink);
 
   // Fetch user email when authed
   useEffect(() => {
@@ -60,6 +67,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       cancelled = true;
     };
   }, [isAuthed]);
+
+  // Load collaboration links when authenticated
+  useEffect(() => {
+    if (isAuthed && cloudEnabled) {
+      const loadLinks = async () => {
+        try {
+          const { fetchTeacherStudentLinks } = await import('../utils/sync/collaborationSync');
+          const [teacherLinks, studentLinks] = await Promise.all([
+            fetchTeacherStudentLinks('teacher'),
+            fetchTeacherStudentLinks('student'),
+          ]);
+          useCollaborationStore.setState({
+            linkedTeachers: teacherLinks,
+            linkedStudents: studentLinks,
+          });
+        } catch (error) {
+          console.error('[SettingsScreen] Failed to load collaboration links:', error);
+        }
+      };
+      loadLinks();
+    }
+  }, [isAuthed, cloudEnabled]);
 
   // Get device info
   const deviceInfo = {
@@ -343,6 +372,100 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
         )}
       </View>
 
+      {/* Collaboration Section */}
+      {cloudEnabled && isAuthed && (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Collaboration</Text>
+
+        {/* Linked Teachers */}
+        {linkedTeachers.length > 0 && (
+          <View>
+            <Text style={styles.subsectionTitle}>Linked Teachers</Text>
+            {linkedTeachers.map(link => (
+              <View key={link.id} style={styles.linkRow}>
+                <View style={styles.linkInfo}>
+                  <Text style={styles.linkLabel}>
+                    {link.status === LinkStatus.ACTIVE ? '✓ Active' : '⏳ Pending'}
+                  </Text>
+                  <Text style={styles.linkDetail}>Code: {link.inviteCode}</Text>
+                </View>
+                {link.status === LinkStatus.ACTIVE && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.dangerButton, { paddingVertical: 6, paddingHorizontal: 12 }]}
+                    onPress={() => {
+                      Alert.alert(
+                        'Remove Link',
+                        'Are you sure you want to remove this teacher link?',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Remove',
+                            style: 'destructive',
+                            onPress: () => revokeLink(link.id),
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <Text style={[styles.buttonText, styles.dangerButtonText, { fontSize: 12 }]}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Linked Students */}
+        {linkedStudents.length > 0 && (
+          <View style={{ marginTop: linkedTeachers.length > 0 ? 16 : 0 }}>
+            <Text style={styles.subsectionTitle}>Linked Students</Text>
+            {linkedStudents.map(link => (
+              <View key={link.id} style={styles.linkRow}>
+                <View style={styles.linkInfo}>
+                  <Text style={styles.linkLabel}>
+                    {link.status === LinkStatus.ACTIVE ? '✓ Active' : '⏳ Pending'}
+                  </Text>
+                  <Text style={styles.linkDetail}>Code: {link.inviteCode}</Text>
+                </View>
+                {link.status === LinkStatus.ACTIVE && (
+                  <TouchableOpacity
+                    style={[styles.button, styles.dangerButton, { paddingVertical: 6, paddingHorizontal: 12 }]}
+                    onPress={() => {
+                      Alert.alert(
+                        'Remove Link',
+                        'Are you sure you want to remove this student link?',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Remove',
+                            style: 'destructive',
+                            onPress: () => revokeLink(link.id),
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <Text style={[styles.buttonText, styles.dangerButtonText, { fontSize: 12 }]}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {linkedTeachers.length === 0 && linkedStudents.length === 0 && (
+          <Text style={styles.infoValue}>No collaboration links yet</Text>
+        )}
+
+        <TouchableOpacity
+          style={[styles.button, { marginTop: 16 }]}
+          onPress={() => navigation.navigate('TrainingMode', { problemId: undefined })}
+        >
+          <Text style={styles.buttonText}>Go to Canvas to Collaborate</Text>
+        </TouchableOpacity>
+      </View>
+      )}
+
       {/* App Info Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>App Information</Text>
@@ -565,5 +688,33 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 40,
+  },
+  subsectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6E6E73',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  linkInfo: {
+    flex: 1,
+  },
+  linkLabel: {
+    fontSize: 16,
+    color: '#1D1D1F',
+    fontWeight: '500',
+  },
+  linkDetail: {
+    fontSize: 14,
+    color: '#6E6E73',
+    marginTop: 4,
   },
 });

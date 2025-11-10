@@ -114,7 +114,7 @@ interface QueueStats {
  */
 export function enqueue(type: QueueItemType, payload: any): string {
   try {
-    const id = genId('q_');
+    const id = genId();
     const now = Date.now();
 
     const item: QueueItem = {

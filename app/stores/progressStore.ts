@@ -16,6 +16,7 @@ import {
   StudentProgress,
 } from '../types/Attempt';
 import { storage } from '../utils/storage';
+import { genId } from '../utils/id';
 
 /**
  * Storage keys for MMKV persistence
@@ -26,7 +27,13 @@ const STORAGE_KEYS = {
   PROBLEM_PROGRESS: '@progress:problem_progress',
   SESSION_ID: '@progress:session_id',
   STATS: '@progress:stats',
+  MIGRATION_COMPLETE: '@progress:migration_complete',
 };
+
+/**
+ * UUID v4 validation regex
+ */
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /**
  * Progress store state interface
@@ -87,31 +94,48 @@ interface ProgressStoreState {
 }
 
 /**
- * Generate unique attempt ID
+ * Generate unique attempt ID using UUID v4
  */
 function generateAttemptId(): string {
-  return `attempt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return genId();
 }
 
 /**
- * Generate unique session ID
+ * Generate unique session ID using UUID v4
  */
 function generateSessionId(): string {
-  return `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return genId();
 }
 
 /**
- * Get or create session ID (lazy initialization)
+ * Validate if string is a valid UUID v4
+ */
+function isValidUUID(id: string): boolean {
+  return UUID_V4_REGEX.test(id);
+}
+
+/**
+ * Get or create session ID (lazy initialization with migration)
  */
 function getSessionId(): string {
   try {
     const stored = storage.getString(STORAGE_KEYS.SESSION_ID);
-    if (stored) {
+
+    // Validate stored session ID format
+    if (stored && isValidUUID(stored)) {
       return stored;
     }
 
+    // If stored ID exists but is invalid format (old format), clear it
+    if (stored && !isValidUUID(stored)) {
+      console.warn('[ProgressStore] Migrating old session ID format:', stored);
+      storage.delete(STORAGE_KEYS.SESSION_ID);
+    }
+
+    // Generate new UUID-based session ID
     const newSessionId = generateSessionId();
     storage.set(STORAGE_KEYS.SESSION_ID, newSessionId);
+    console.log('[ProgressStore] Created new session ID:', newSessionId);
     return newSessionId;
   } catch (error) {
     console.warn('[ProgressStore] Failed to get session ID from storage:', error);

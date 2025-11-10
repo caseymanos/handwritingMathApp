@@ -6,7 +6,7 @@
  * Accepts problemId via navigation route params
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +21,8 @@ import { ProblemDisplay } from '../components/ProblemDisplay';
 import { ValidationFeedback } from '../components/ValidationFeedback';
 import { AppHeader } from '../components/AppHeader';
 import { StepResultDisplay, StepResult } from '../components/StepResultDisplay';
+import { CollaborationModal } from '../components/CollaborationModal';
+import { SessionControls } from '../components/SessionControls';
 import { getLineNumberFromStrokes } from '../utils/lineDetectionUtils';
 import SuccessAnimation from '../components/SuccessAnimation';
 import {
@@ -35,11 +37,15 @@ import { useCanvasStore } from '../stores/canvasStore';
 import { useValidationStore } from '../stores/validationStore';
 import { useHintStore } from '../stores/hintStore';
 import { useProgressStore } from '../stores/progressStore';
+import { useCollaborationStore, selectPeerStrokes, selectIsInSession, selectLiveStrokes, selectBroadcastStroke } from '../stores/collaborationStore';
+import { useRealtimeCollaboration } from '../hooks/useRealtimeCollaboration';
+import { getCurrentUser } from '../utils/sync/supabaseClient';
 import { RecognitionStatus, MyScriptEndpoint } from '../types/MyScript';
 import { getMyScriptClient } from '../utils/myScriptClient';
 import { getRandomProblem, getNextProblem, getProblemById } from '../utils/problemData';
 import { ValidationErrorType } from '../types/Validation';
 import { Step } from '../types/Attempt';
+import { genId } from '../utils/id';
 
 const WELCOME_MODAL_KEY = '@handwriting_math:welcome_shown';
 
@@ -62,6 +68,8 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
   const [currentProblem, setCurrentProblem] = useState<Problem | null>(null);
   const [stepResults, setStepResults] = useState<StepResult[]>([]); // Track all step results
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  const [showCollaborationModal, setShowCollaborationModal] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   // Use ref for timer to avoid stale closures and ensure proper cleanup
   const autoValidationTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -98,6 +106,18 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
     addStepToAttempt,
     currentAttempt,
   } = useProgressStore();
+
+  // Access collaboration store
+  const isInSession = useCollaborationStore(selectIsInSession);
+  const allLiveStrokes = useCollaborationStore(selectLiveStrokes);
+  const peerStrokes = useMemo(
+    () => allLiveStrokes.filter(stroke => stroke.authorId !== (currentUserId || '')),
+    [allLiveStrokes, currentUserId]
+  );
+  const broadcastStroke = useCollaborationStore(selectBroadcastStroke);
+
+  // Initialize realtime collaboration hook
+  useRealtimeCollaboration();
 
   // Track step start time for attempt tracking
   const [stepStartTime, setStepStartTime] = useState<number | null>(null);
@@ -148,7 +168,8 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       setStepResults([]);
       console.log('[TrainingModeScreen] Cleared step results for new problem');
     }
-  }, [currentProblem, setValidationProblem, startAttempt, stopInactivityTimer, clearHint, resetIncorrectAttempts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProblem]);
 
   // Initialize endpoint from client on mount
   useEffect(() => {
@@ -179,6 +200,15 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
     checkWelcomeStatus();
   }, []);
 
+  // Get current user ID for collaboration
+  useEffect(() => {
+    getCurrentUser().then(user => {
+      if (user) {
+        setCurrentUserId(user.id);
+      }
+    });
+  }, []);
+
   const handleWelcomeDismiss = async () => {
     try {
       await AsyncStorage.setItem(WELCOME_MODAL_KEY, 'true');
@@ -196,6 +226,11 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       pointCount: stroke.points.length,
       color: stroke.color,
     });
+
+    // Broadcast stroke to collaborating peer if in session
+    if (isInSession) {
+      broadcastStroke(stroke);
+    }
 
     // Don't cancel auto-validation timer - let it complete so validation always happens
     // This ensures users always get feedback on their work
@@ -332,7 +367,7 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       // Create Step object and add to attempt (regardless of validation result)
       if (stepStartTime) {
         const stepData: Step = {
-          id: `step_${currentProblem.id}_${currentStepNumber}_${Date.now()}`,
+          id: genId(),
           strokeData: [...strokes], // Deep copy strokes
           recognizedText: recognitionResult?.text || stepLatex,
           latex: stepLatex,
@@ -587,6 +622,17 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
             <Text style={styles.clearButtonText}>Show Toolbar</Text>
           </TouchableOpacity>
         )}
+
+        {/* Collaborate button */}
+        {!isInSession && (
+          <TouchableOpacity
+            style={[styles.clearButton, { backgroundColor: '#007AFF' }]}
+            onPress={() => setShowCollaborationModal(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.clearButtonText}>Collaborate</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
         {/* Problem Display - Between buttons and canvas */}
@@ -598,6 +644,17 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
           />
         </View>
 
+      {/* Collaboration session controls (shown when in active session) */}
+      {isInSession && (
+        <View style={styles.sessionControlsContainer}>
+          <SessionControls
+            onLeaveSession={() => {
+              console.log('[TrainingModeScreen] Left collaboration session');
+            }}
+          />
+        </View>
+      )}
+
       {/* Full-screen canvas (below problem) */}
       <View style={styles.canvasWrapper}>
         <HandwritingCanvas
@@ -605,6 +662,7 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
           selectedTool={selectedTool}
           showLineGuides={showLineGuides}
           enableRecognition={true}
+          peerStrokes={peerStrokes}
           onStrokeComplete={handleStrokeComplete}
           onStrokesChange={handleStrokesChange}
           onRecognitionComplete={handleRecognitionComplete}
@@ -643,6 +701,15 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       <WelcomeModal
         visible={showWelcome}
         onDismiss={handleWelcomeDismiss}
+      />
+
+      {/* Collaboration modal (for starting collaboration sessions) */}
+      <CollaborationModal
+        visible={showCollaborationModal}
+        onClose={() => setShowCollaborationModal(false)}
+        onSessionStarted={() => {
+          setShowCollaborationModal(false);
+        }}
       />
 
       {/* Validation feedback (shows validation results) */}
@@ -786,5 +853,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  sessionControlsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#F5F5F7',
   },
 });

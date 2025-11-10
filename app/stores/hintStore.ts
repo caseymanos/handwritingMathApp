@@ -19,6 +19,7 @@ import {
 import { ValidationErrorType } from '../types/Validation';
 import { ProblemCategory } from '../types/Problem';
 import { selectContextualHint, getFallbackHint } from '../../hint-library/hintMapper';
+import { genId } from '../utils/id';
 
 // Initialize MMKV storage for hints
 const hintStorage = new MMKV({ id: 'hint-storage' });
@@ -28,10 +29,10 @@ const INACTIVITY_DELAY_MS = 10000; // 10 seconds
 const MIN_INCORRECT_ATTEMPTS_FOR_AUTO = 2; // Show hint after 2 incorrect attempts
 
 /**
- * Generate unique ID for hint history entries
+ * Generate unique ID for hint history entries using UUID v4
  */
 function generateHintHistoryId(): string {
-  return `hint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return genId();
 }
 
 /**

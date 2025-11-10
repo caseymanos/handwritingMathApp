@@ -1,17 +1,26 @@
 /**
- * Lightweight ID generator for React Native without native crypto.
- * Avoids RNGetRandomValues dependency used by uuid().
+ * ID generator using UUID v4 for database compatibility.
+ * Pure JavaScript implementation to avoid native module dependencies.
  */
 
-let counter = 0;
+/**
+ * Generate a RFC 4122 compliant UUID v4
+ * @returns A standard UUID v4 string (e.g., "550e8400-e29b-41d4-a716-446655440000")
+ */
+export function genId(): string {
+  // Generate 16 random bytes
+  const bytes: number[] = [];
+  for (let i = 0; i < 16; i++) {
+    bytes.push(Math.floor(Math.random() * 256));
+  }
 
-export function genId(prefix = ''): string {
-  const time = Date.now().toString(36);
-  const rand1 = Math.random().toString(36).slice(2, 10);
-  const rand2 = Math.random().toString(36).slice(2, 10);
-  counter = (counter + 1) % 1_000_000;
-  const seq = counter.toString(36).padStart(4, '0');
-  return `${prefix}${time}-${rand1}-${rand2}-${seq}`;
+  // Set version (4) and variant bits according to RFC 4122
+  bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant 10
+
+  // Convert to hex string with dashes
+  const hex = bytes.map(b => b.toString(16).padStart(2, '0'));
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
 }
 
 export default genId;
