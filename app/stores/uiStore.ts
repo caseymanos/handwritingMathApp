@@ -17,6 +17,7 @@ const STORAGE_KEYS = {
   TOOLBAR_VISIBLE: '@ui:toolbar_visible',
   TOOLBAR_POSITION: '@ui:toolbar_position',
   WELCOME_SHOWN: '@ui:welcome_shown',
+  AUDIO_ENABLED: '@ui:audio_enabled',
 };
 
 /**
@@ -86,6 +87,10 @@ interface UIStoreState {
   keyboardVisible: boolean;
   keyboardHeight: number;
 
+  // Audio/TTS state
+  audioEnabled: boolean;
+  audioPlaying: boolean;
+
   // Actions: Loading
   setLoading: (loading: boolean, message?: string, progress?: number) => void;
   startLoading: (message?: string) => void;
@@ -128,6 +133,11 @@ interface UIStoreState {
   // Actions: Keyboard
   setKeyboardVisible: (visible: boolean, height?: number) => void;
 
+  // Actions: Audio/TTS
+  toggleAudio: () => void;
+  setAudioEnabled: (enabled: boolean) => void;
+  setAudioPlaying: (playing: boolean) => void;
+
   // Actions: Persistence
   saveToStorage: () => void;
   loadFromStorage: () => void;
@@ -161,6 +171,8 @@ const initialState = {
   hintCollapsed: false,
   keyboardVisible: false,
   keyboardHeight: 0,
+  audioEnabled: true, // Default to enabled
+  audioPlaying: false,
 };
 
 /**
@@ -375,6 +387,36 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
     });
   },
 
+  // Audio/TTS actions
+  toggleAudio: () => {
+    const newEnabled = !get().audioEnabled;
+    set({ audioEnabled: newEnabled });
+    
+    // Persist to storage
+    try {
+      storage.set(STORAGE_KEYS.AUDIO_ENABLED, newEnabled);
+      console.log('[UIStore] Audio enabled:', newEnabled);
+    } catch (error) {
+      console.error('[UIStore] Failed to save audio preference:', error);
+    }
+  },
+
+  setAudioEnabled: (enabled: boolean) => {
+    set({ audioEnabled: enabled });
+    
+    // Persist to storage
+    try {
+      storage.set(STORAGE_KEYS.AUDIO_ENABLED, enabled);
+      console.log('[UIStore] Audio enabled:', enabled);
+    } catch (error) {
+      console.error('[UIStore] Failed to save audio preference:', error);
+    }
+  },
+
+  setAudioPlaying: (playing: boolean) => {
+    set({ audioPlaying: playing });
+  },
+
   // Persistence
   saveToStorage: () => {
     const state = get();
@@ -383,6 +425,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
       storage.set(STORAGE_KEYS.TOOLBAR_VISIBLE, state.toolbarVisible);
       storage.set(STORAGE_KEYS.TOOLBAR_POSITION, state.toolbarPosition);
       storage.set(STORAGE_KEYS.WELCOME_SHOWN, state.modals.welcome);
+      storage.set(STORAGE_KEYS.AUDIO_ENABLED, state.audioEnabled);
 
       console.log('[UIStore] Saved to storage');
     } catch (error) {
@@ -395,6 +438,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
       const toolbarVisible = storage.getBoolean(STORAGE_KEYS.TOOLBAR_VISIBLE);
       const toolbarPosition = storage.getString(STORAGE_KEYS.TOOLBAR_POSITION);
       const welcomeShown = storage.getBoolean(STORAGE_KEYS.WELCOME_SHOWN);
+      const audioEnabled = storage.getBoolean(STORAGE_KEYS.AUDIO_ENABLED);
 
       set({
         toolbarVisible: toolbarVisible !== undefined ? toolbarVisible : true,
@@ -403,6 +447,7 @@ export const useUIStore = create<UIStoreState>((set, get) => ({
           ...initialState.modals,
           welcome: welcomeShown !== undefined ? welcomeShown : false,
         },
+        audioEnabled: audioEnabled !== undefined ? audioEnabled : true,
       });
 
       console.log('[UIStore] Loaded from storage');
@@ -455,3 +500,12 @@ export const selectKeyboardState = (state: UIStoreState) => ({
   visible: state.keyboardVisible,
   height: state.keyboardHeight,
 });
+
+// Get audio state
+export const selectAudioState = (state: UIStoreState) => ({
+  enabled: state.audioEnabled,
+  playing: state.audioPlaying,
+});
+
+export const selectAudioEnabled = (state: UIStoreState) => state.audioEnabled;
+export const selectAudioPlaying = (state: UIStoreState) => state.audioPlaying;

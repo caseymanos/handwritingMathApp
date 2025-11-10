@@ -40,6 +40,9 @@ interface FloatingToolbarProps {
   onUndoStroke?: () => void;
   onUndoLine?: () => void;
   canUndo?: boolean;
+  // Audio toggle (optional)
+  audioEnabled?: boolean;
+  onToggleAudio?: () => void;
 }
 
 /**
@@ -288,6 +291,25 @@ export const FloatingToolbar: React.FC<FloatingToolbarProps> = ({
           >
             <Text style={styles.toolIcon}>📏</Text>
           </TouchableOpacity>
+
+          {/* Audio Toggle (if callback provided) */}
+          {onToggleAudio && (
+            <>
+              {/* Divider */}
+              <View style={styles.divider} />
+              
+              <TouchableOpacity
+                style={[
+                  styles.toolButton,
+                  audioEnabled && styles.selectedTool,
+                ]}
+                onPress={onToggleAudio}
+                accessibilityLabel={`${audioEnabled ? 'Disable' : 'Enable'} audio hints`}
+              >
+                <Text style={styles.toolIcon}>{audioEnabled ? '🔊' : '🔇'}</Text>
+              </TouchableOpacity>
+            </>
+          )}
 
           {/* Divider */}
           <View style={styles.divider} />

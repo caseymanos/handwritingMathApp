@@ -37,9 +37,11 @@ import { useCanvasStore } from '../stores/canvasStore';
 import { useValidationStore } from '../stores/validationStore';
 import { useHintStore } from '../stores/hintStore';
 import { useProgressStore } from '../stores/progressStore';
+import { useUIStore, selectAudioEnabled } from '../stores/uiStore';
 import { useCollaborationStore, selectPeerStrokes, selectIsInSession, selectLiveStrokes, selectBroadcastStroke } from '../stores/collaborationStore';
 import { useRealtimeCollaboration } from '../hooks/useRealtimeCollaboration';
 import { useProblemSync } from '../hooks/useProblemSync';
+import { useHintAudio } from '../hooks/useHintAudio';
 import { getCurrentUser } from '../utils/sync/supabaseClient';
 import { RecognitionStatus, MyScriptEndpoint } from '../types/MyScript';
 import { getMyScriptClient } from '../utils/myScriptClient';
@@ -157,6 +159,9 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
       setRecognitionResult(null);
     },
   });
+
+  // Initialize hint audio narration hook
+  useHintAudio();
 
   // Track step start time for attempt tracking
   const [stepStartTime, setStepStartTime] = useState<number | null>(null);
@@ -727,6 +732,9 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
             (store as any).undoLastLine?.();
           }}
           canUndo={strokes.length > 0}
+          // Audio toggle
+          audioEnabled={useUIStore(selectAudioEnabled)}
+          onToggleAudio={() => useUIStore.getState().toggleAudio()}
         />
       )}
 

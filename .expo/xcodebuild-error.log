@@ -1,0 +1,8 @@
+** BUILD FAILED **
+
+
+The following build commands failed:
+	CompileC /Users/caseymanos/Library/Developer/Xcode/DerivedData/handwritingMathApp-bwqkatshkzebifgvygyrzujagwts/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/ReactCodegen.build/Objects-normal/arm64/ComponentDescriptors-8be5fa4350057c0fd5a4ed6c101cbcc6.o /Users/caseymanos/GauntletAI/handwritingMath/ios/build/generated/ios/react/renderer/components/RNCWebViewSpec/ComponentDescriptors.cpp normal arm64 c++ com.apple.compilers.llvm.clang.1_0.compiler (in target 'ReactCodegen' from project 'Pods')
+	CompileC /Users/caseymanos/Library/Developer/Xcode/DerivedData/handwritingMathApp-bwqkatshkzebifgvygyrzujagwts/Build/Intermediates.noindex/Pods.build/Debug-iphonesimulator/ReactCodegen.build/Objects-normal/arm64/States-fbabd983a25402ab7bdb22bbed3c9599.o /Users/caseymanos/GauntletAI/handwritingMath/ios/build/generated/ios/react/renderer/components/rnskia/States.cpp normal arm64 c++ com.apple.compilers.llvm.clang.1_0.compiler (in target 'ReactCodegen' from project 'Pods')
+	Building workspace handwritingMathApp with scheme handwritingMathApp and configuration Debug
+(3 failures)

@@ -67,8 +67,23 @@ export const InlineMath: React.FC<InlineMathProps> = ({ text, textStyle, contain
             displayMode={false}
             style={mathStyle}
             inlineStyle={`
-              html, body { display: inline-flex; align-items: center; margin: 0; padding: 0; }
-              .katex { font-size: 1.0em; margin: 0 2px; }
+              html, body {
+                display: inline-flex;
+                align-items: center;
+                margin: 0;
+                padding: 0;
+                background: transparent !important;
+              }
+              .katex {
+                font-size: 1.0em;
+                margin: 0 2px;
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+              }
+              .katex-html {
+                background: transparent !important;
+              }
             `}
             onError={(error) => console.log('[InlineMath] KaTeX render error:', error)}
           />

@@ -225,8 +225,8 @@ export const ValidationFeedback: React.FC<ValidationFeedbackProps> = React.memo(
             )}
 
 
-          {/* Hint display with HintReveal component */}
-          {currentHint && (
+          {/* Hint display with HintReveal component - only show on incorrect validation */}
+          {currentHint && !currentValidation.isCorrect && (
             <HintReveal
               hint={currentHint.text}
               level={hintLevel || null}

@@ -20,8 +20,14 @@ import type { SettingsScreenProps } from '../navigation/types';
 import { useProgressStore } from '../stores/progressStore';
 import { useTutorialStore } from '../stores/tutorialStore';
 import { useCollaborationStore } from '../stores/collaborationStore';
+import { useUIStore } from '../stores/uiStore';
 import { storage } from '../utils/storage';
 import { LinkStatus } from '../types/Collaboration';
+import {
+  isElevenLabsConfigured,
+  getRemainingCharacters,
+  getSubscriptionInfo
+} from '../utils/elevenLabsClient';
 
 // App version (should match package.json in production)
 const APP_VERSION = '1.0.0';
@@ -29,10 +35,21 @@ const BUILD_NUMBER = '1';
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected' | 'unknown'>('unknown');
+  const [elevenLabsStatus, setElevenLabsStatus] = useState<'configured' | 'not_configured'>('not_configured');
+  const [elevenLabsCredits, setElevenLabsCredits] = useState<{
+    remaining: number;
+    limit: number;
+    percentage: number;
+  } | null>(null);
+  const [loadingCredits, setLoadingCredits] = useState(false);
 
   // Get progress store data
   const totalAttempts = useProgressStore(state => state.attemptCount);
   const clearHistory = useProgressStore(state => state.clearHistory);
+
+  // Get audio preferences from UI store
+  const audioEnabled = useUIStore(state => state.audioEnabled);
+  const toggleAudio = useUIStore(state => state.toggleAudio);
 
   // Get tutorial store methods
   const clearLessonsCache = useTutorialStore(state => state.clearLessonsCache);
@@ -77,6 +94,34 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       });
     }
   }, [isAuthed, cloudEnabled, loadCollaborationLinks]);
+
+  // Check ElevenLabs configuration and load credits
+  useEffect(() => {
+    const checkElevenLabs = async () => {
+      try {
+        const configured = isElevenLabsConfigured();
+        setElevenLabsStatus(configured ? 'configured' : 'not_configured');
+
+        if (configured && audioEnabled) {
+          setLoadingCredits(true);
+          try {
+            const credits = await getRemainingCharacters();
+            setElevenLabsCredits(credits);
+          } catch (error) {
+            console.error('[SettingsScreen] Failed to load ElevenLabs credits:', error);
+            setElevenLabsCredits(null);
+          } finally {
+            setLoadingCredits(false);
+          }
+        }
+      } catch (error) {
+        console.error('[SettingsScreen] Failed to check ElevenLabs config:', error);
+        setElevenLabsStatus('not_configured');
+      }
+    };
+
+    checkElevenLabs();
+  }, [audioEnabled]);
 
   // Get device info
   const deviceInfo = {
@@ -454,6 +499,78 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
       </View>
       )}
 
+      {/* Audio Settings Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Audio Settings</Text>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Audio Hints</Text>
+          <TouchableOpacity
+            style={[
+              styles.toggleButton,
+              audioEnabled ? styles.toggleButtonOn : styles.toggleButtonOff
+            ]}
+            onPress={toggleAudio}
+            accessibilityLabel={`${audioEnabled ? 'Disable' : 'Enable'} audio hints`}
+          >
+            <Text style={styles.toggleButtonText}>
+              {audioEnabled ? 'ON' : 'OFF'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>ElevenLabs API</Text>
+          <Text style={[
+            styles.infoValue,
+            elevenLabsStatus === 'configured' ? styles.successText : styles.errorText
+          ]}>
+            {elevenLabsStatus === 'configured' ? '✓ Configured' : '✗ Not Configured'}
+          </Text>
+        </View>
+
+        {elevenLabsStatus === 'configured' && audioEnabled && (
+          <View style={styles.creditsContainer}>
+            <Text style={styles.infoLabel}>Character Credits</Text>
+            {loadingCredits ? (
+              <Text style={styles.infoValue}>Loading...</Text>
+            ) : elevenLabsCredits ? (
+              <>
+                <View style={styles.creditsRow}>
+                  <Text style={styles.creditsText}>
+                    {elevenLabsCredits.remaining.toLocaleString()} / {elevenLabsCredits.limit.toLocaleString()}
+                  </Text>
+                  <Text style={styles.creditsPercentage}>
+                    ({elevenLabsCredits.percentage.toFixed(1)}% remaining)
+                  </Text>
+                </View>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: `${elevenLabsCredits.percentage}%`,
+                        backgroundColor: elevenLabsCredits.percentage > 20 ? '#4CAF50' : '#FF5252'
+                      }
+                    ]}
+                  />
+                </View>
+              </>
+            ) : (
+              <Text style={[styles.infoValue, styles.errorText]}>Failed to load credits</Text>
+            )}
+          </View>
+        )}
+
+        {elevenLabsStatus === 'not_configured' && (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningText}>
+              ⚠️ ElevenLabs API key not configured. Add ELEVENLABS_API_KEY to your .env file to enable audio hints.
+            </Text>
+          </View>
+        )}
+      </View>
+
       {/* App Info Section */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>App Information</Text>
@@ -704,5 +821,76 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6E6E73',
     marginTop: 4,
+  },
+  toggleButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  toggleButtonOn: {
+    backgroundColor: '#34C759',
+  },
+  toggleButtonOff: {
+    backgroundColor: '#8E8E93',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  successText: {
+    color: '#34C759',
+    fontWeight: '500',
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontWeight: '500',
+  },
+  creditsContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 8,
+  },
+  creditsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  creditsText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1D1D1F',
+  },
+  creditsPercentage: {
+    fontSize: 14,
+    color: '#6E6E73',
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#E5E5EA',
+    borderRadius: 4,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  warningBox: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#FFF3CD',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD60A',
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#856404',
+    lineHeight: 20,
   },
 });
