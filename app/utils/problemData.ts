@@ -1547,7 +1547,7 @@ export const LINEAR_EQUATION_PROBLEMS: Problem[] = [
       {
         stepNumber: 6,
         description: 'Simplify',
-        expression: '6 = x',
+        expression: 'x = 6',
         operation: 'simplify',
       },
     ],
