@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 2025-11-10 – UIScene lifecycle, EAS Updates, and Expo Go compatibility documentation
+- **iOS Configuration:**
+  - Added `UIApplicationSceneManifest` to Info.plist (required for iOS scene lifecycle)
+  - Configured `UISceneDelegateClassName` as `RCTAppDelegate`
+  - Prevents future iOS scene creation crashes and assertions
+- **EAS Updates:**
+  - Installed `expo-updates@^29.0.12` for over-the-air update support
+  - Configured preview channel in eas.json for quick iterations
+  - Added expo-updates plugin to app.json
+- **Documentation:**
+  - Created `docs/EXPO_GO_ERROR_ANALYSIS.md` - Comprehensive analysis of Expo Go limitations and errors
+  - Created `RUNNING_THE_APP.md` - Quick reference guide for development workflow
+  - Documented why standard Expo Go won't work (custom native modules)
+  - Provided solutions for testing with custom dev client, EAS builds, and standalone builds
+- **Developer Guidance:**
+  - Clarified custom native module requirements (@shopify/react-native-skia, react-native-reanimated)
+  - Explained difference between Expo Go and custom development client
+  - Added troubleshooting section for common build issues
+
+**Commits:** `42944df` - "fix: add UIScene lifecycle configuration and EAS Update support"
+
 ### 2025-11-09 – Tutorial Mode polish, online-first auth, and stability fixes
 - Video player sizing: measure container and set iframe width/height for exact 16:9 — fixes cropping on iPad/tablets (`app/components/VideoPlayer.tsx`).
 - Tutorial flow now online‑first: sync only when authenticated; clear banner CTA to sign in. Live progress updates during playback (`app/screens/TutorialScreen.tsx`, `app/stores/tutorialStore.ts`).
