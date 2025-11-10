@@ -163,6 +163,10 @@ export interface CollaborationStoreState {
   generateInviteCode: () => Promise<string>;
   acceptInviteCode: (code: string) => Promise<void>;
   revokeLink: (linkId: string) => Promise<void>;
+  loadLinks: () => Promise<{
+    teacherLinks: TeacherStudentLink[];
+    studentLinks: TeacherStudentLink[];
+  }>;
 }
 
 /**

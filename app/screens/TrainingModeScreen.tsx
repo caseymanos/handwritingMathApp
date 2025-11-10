@@ -574,86 +574,80 @@ export const TrainingModeScreen: React.FC<TrainingModeScreenProps> = ({ navigati
         {/* App Header */}
         <AppHeader />
 
-      {/* Control buttons container (below header) */}
-      <View style={styles.controlsContainer}>
-        {/* Next Problem button */}
-        <TouchableOpacity
-          style={styles.nextProblemButton}
-          onPress={handleNextProblem}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.nextProblemText}>Next Problem</Text>
-        </TouchableOpacity>
+        {/* Top controls + status */}
+        <View style={styles.topSection}>
+          <View style={styles.controlsContainer}>
+            <TouchableOpacity
+              style={styles.nextProblemButton}
+              onPress={handleNextProblem}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.nextProblemText}>Next Problem</Text>
+            </TouchableOpacity>
 
-        {/* Back to Home button */}
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleBackToHome}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backButtonText}>Home</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handleBackToHome}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backButtonText}>Home</Text>
+            </TouchableOpacity>
 
-        {/* Clear Canvas button */}
-        <TouchableOpacity
-          style={styles.clearButton}
-          onPress={handleClearCanvas}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.clearButtonText}>Clear Canvas</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={handleClearCanvas}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.clearButtonText}>Clear Canvas</Text>
+            </TouchableOpacity>
 
-        {/* Manual Check button (replaces Clear Cache) */}
-        <TouchableOpacity
-          style={[styles.clearButton, { backgroundColor: '#34C759' }]}
-          onPress={handleManualCheck}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.clearButtonText}>Check Now</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.clearButton, { backgroundColor: '#34C759' }]}
+              onPress={handleManualCheck}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.clearButtonText}>Check Now</Text>
+            </TouchableOpacity>
 
-        {/* Show Toolbar button (only visible when toolbar is hidden) */}
-        {!isToolbarVisible && (
-          <TouchableOpacity
-            style={[styles.clearButton, { backgroundColor: '#5856D6' }]}
-            onPress={handleToggleToolbar}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.clearButtonText}>Show Toolbar</Text>
-          </TouchableOpacity>
-        )}
+            {!isToolbarVisible && (
+              <TouchableOpacity
+                style={[styles.clearButton, { backgroundColor: '#5856D6' }]}
+                onPress={handleToggleToolbar}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clearButtonText}>Show Toolbar</Text>
+              </TouchableOpacity>
+            )}
 
-        {/* Collaborate button */}
-        {!isInSession && (
-          <TouchableOpacity
-            style={[styles.clearButton, { backgroundColor: '#007AFF' }]}
-            onPress={() => setShowCollaborationModal(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.clearButtonText}>Collaborate</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+            {!isInSession && (
+              <TouchableOpacity
+                style={[styles.clearButton, { backgroundColor: '#007AFF' }]}
+                onPress={() => setShowCollaborationModal(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.clearButtonText}>Collaborate</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-        {/* Problem Display - Between buttons and canvas */}
-        <View style={styles.problemContainer}>
-          <ProblemDisplay
-            problem={currentProblem}
-            showDifficulty={true}
-            showInstructions={true}
-          />
+          {isInSession && (
+            <View style={styles.sessionControlsContainer}>
+              <SessionControls
+                onLeaveSession={() => {
+                  console.log('[TrainingModeScreen] Left collaboration session');
+                }}
+              />
+            </View>
+          )}
+
+          <View style={styles.problemContainer}>
+            <ProblemDisplay
+              problem={currentProblem}
+              showDifficulty={true}
+              showInstructions={true}
+            />
+          </View>
         </View>
-
-      {/* Collaboration session controls (shown when in active session) */}
-      {isInSession && (
-        <View style={styles.sessionControlsContainer}>
-          <SessionControls
-            onLeaveSession={() => {
-              console.log('[TrainingModeScreen] Left collaboration session');
-            }}
-          />
-        </View>
-      )}
 
       {/* Full-screen canvas (below problem) */}
       <View style={styles.canvasWrapper}>
@@ -765,24 +759,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   problemContainer: {
-    position: 'absolute',
-    top: 120,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    pointerEvents: 'none', // Ensure touches go to canvas; UI is informational
+    marginTop: 8,
+  },
+  topSection: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 12,
+    gap: 12,
+    backgroundColor: '#F5F5F7',
   },
   controlsContainer: {
-    position: 'absolute',
-    top: 75,
-    left: 20,
-    right: 20,
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     alignItems: 'center',
     justifyContent: 'flex-start',
-    flexWrap: 'wrap',
-    zIndex: 100,
   },
   nextProblemButton: {
     backgroundColor: '#007AFF',
@@ -855,8 +846,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sessionControlsContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#F5F5F7',
+    marginTop: 12,
   },
 });

@@ -30,7 +30,7 @@ export async function upsertTeacherStudentLink(link: TeacherStudentLink): Promis
     if (!user) {
       console.warn('[CollaborationSync] Not authenticated, enqueueing link for later');
       enqueue(QueueItemType.TEACHER_STUDENT_LINK, link);
-      return;
+      throw new Error('You must be signed in to sync collaboration links.');
     }
 
     const client = getSupabaseClient();
@@ -48,17 +48,16 @@ export async function upsertTeacherStudentLink(link: TeacherStudentLink): Promis
     });
 
     if (error) {
-      console.error('[CollaborationSync] Link upsert failed:', error);
-      enqueue(QueueItemType.TEACHER_STUDENT_LINK, link);
-      captureException(new Error(`Link sync failed: ${error.message}`), { linkId: link.id });
-    } else {
-      addBreadcrumb('Teacher-student link synced', 'sync', { linkId: link.id });
-      console.log('[CollaborationSync] Link synced:', link.id);
+      throw error;
     }
+
+    addBreadcrumb('Teacher-student link synced', 'sync', { linkId: link.id });
+    console.log('[CollaborationSync] Link synced:', link.id);
   } catch (error) {
     console.error('[CollaborationSync] Link upsert error:', error);
     enqueue(QueueItemType.TEACHER_STUDENT_LINK, link);
     captureException(error as Error, { linkId: link.id });
+    throw (error instanceof Error ? error : new Error('Failed to sync teacher-student link'));
   }
 }
 
@@ -76,7 +75,7 @@ export async function upsertCollaborationSession(session: CollaborationSession):
     if (!user) {
       console.warn('[CollaborationSync] Not authenticated, enqueueing session for later');
       enqueue(QueueItemType.COLLABORATION_SESSION, session);
-      return;
+      throw new Error('You must be signed in to sync collaboration sessions.');
     }
 
     const client = getSupabaseClient();
@@ -95,17 +94,16 @@ export async function upsertCollaborationSession(session: CollaborationSession):
     });
 
     if (error) {
-      console.error('[CollaborationSync] Session upsert failed:', error);
-      enqueue(QueueItemType.COLLABORATION_SESSION, session);
-      captureException(new Error(`Session sync failed: ${error.message}`), { sessionId: session.id });
-    } else {
-      addBreadcrumb('Collaboration session synced', 'sync', { sessionId: session.id });
-      console.log('[CollaborationSync] Session synced:', session.id);
+      throw error;
     }
+
+    addBreadcrumb('Collaboration session synced', 'sync', { sessionId: session.id });
+    console.log('[CollaborationSync] Session synced:', session.id);
   } catch (error) {
     console.error('[CollaborationSync] Session upsert error:', error);
     enqueue(QueueItemType.COLLABORATION_SESSION, session);
     captureException(error as Error, { sessionId: session.id });
+    throw (error instanceof Error ? error : new Error('Failed to sync collaboration session'));
   }
 }
 
@@ -317,55 +315,34 @@ export async function acceptInviteCode(inviteCode: string): Promise<TeacherStude
 
     const client = getSupabaseClient();
 
-    // First, find the link with this invite code
-    const { data: links, error: fetchError } = await client
-      .from('teacher_student_links')
-      .select('*')
-      .eq('invite_code', inviteCode.toUpperCase())
-      .eq('status', 'pending')
-      .limit(1);
+    // Use security-definer RPC so students can claim codes without teacher assignment
+    const { data, error } = await client.rpc('claim_invite_code', {
+      p_invite_code: inviteCode.toUpperCase(),
+    });
 
-    if (fetchError || !links || links.length === 0) {
-      console.error('[CollaborationSync] Invite code not found or expired');
+    if (error || !data) {
+      console.error('[CollaborationSync] Invite code not found or expired', error);
+      captureException(error || new Error('Invite code not found or expired'), { inviteCode });
       return null;
     }
 
-    const link = links[0];
-
-    // Update the link to accepted
-    const { error: updateError } = await client
-      .from('teacher_student_links')
-      .update({
-        student_id: user.id,
-        status: 'active',
-        accepted_at: new Date().toISOString(),
-      })
-      .eq('id', link.id);
-
-    if (updateError) {
-      console.error('[CollaborationSync] Accept invite failed:', updateError);
-      captureException(new Error(`Accept invite failed: ${updateError.message}`), {
-        inviteCode,
-      });
-      return null;
-    }
+    const link = Array.isArray(data) ? data[0] : data;
 
     addBreadcrumb('Invite code accepted', 'collaboration', { inviteCode, linkId: link.id });
     console.log('[CollaborationSync] Invite code accepted:', inviteCode);
 
-    // Return the updated link
     return {
       id: link.id,
       teacherId: link.teacher_id,
       studentId: user.id,
       inviteCode: link.invite_code,
-      status: 'active' as LinkStatus,
+      status: link.status as LinkStatus,
       permissions: link.permissions,
       createdAt: new Date(link.created_at).getTime(),
       expiresAt: link.expires_at ? new Date(link.expires_at).getTime() : null,
-      acceptedAt: Date.now(),
-      revokedAt: null,
-      updatedAt: Date.now(),
+      acceptedAt: link.accepted_at ? new Date(link.accepted_at).getTime() : Date.now(),
+      revokedAt: link.revoked_at ? new Date(link.revoked_at).getTime() : null,
+      updatedAt: link.updated_at ? new Date(link.updated_at).getTime() : Date.now(),
     };
   } catch (error) {
     console.error('[CollaborationSync] Accept invite error:', error);

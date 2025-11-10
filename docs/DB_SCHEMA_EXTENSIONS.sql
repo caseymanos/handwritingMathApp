@@ -32,7 +32,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.teacher_student_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   teacher_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  student_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  student_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   invite_code TEXT UNIQUE NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'active', 'revoked'
   permissions JSONB NOT NULL DEFAULT '{"can_write": true, "can_view_all": true, "can_annotate": true}'::jsonb,
@@ -81,6 +81,50 @@ CREATE POLICY "Students can accept links"
 CREATE POLICY "Teachers can revoke links"
   ON public.teacher_student_links FOR UPDATE
   USING (auth.uid() = teacher_id);
+
+-- Allow nullable student_id to support claim-by-code workflow
+ALTER TABLE public.teacher_student_links
+  ALTER COLUMN student_id DROP NOT NULL;
+
+-- Security-definer helper to claim invite codes without exposing tables
+CREATE OR REPLACE FUNCTION public.claim_invite_code(p_invite_code TEXT)
+RETURNS teacher_student_links
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_link teacher_student_links;
+BEGIN
+  SELECT *
+    INTO v_link
+    FROM public.teacher_student_links
+   WHERE invite_code = upper(p_invite_code)
+     AND status = 'pending'
+     AND (expires_at IS NULL OR expires_at > NOW())
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Invite code not found or expired' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF v_link.student_id IS NOT NULL AND v_link.student_id <> auth.uid() THEN
+    RAISE EXCEPTION 'Invite code already claimed' USING ERRCODE = 'P0001';
+  END IF;
+
+  UPDATE public.teacher_student_links
+     SET student_id = auth.uid(),
+         status = 'active',
+         accepted_at = NOW(),
+         updated_at = NOW()
+   WHERE id = v_link.id
+   RETURNING * INTO v_link;
+
+  RETURN v_link;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.claim_invite_code(TEXT) TO authenticated;
 
 -- Comment for documentation
 COMMENT ON TABLE public.teacher_student_links IS 'Manages teacher-student relationships via invite codes. Students must accept invite to activate link.';

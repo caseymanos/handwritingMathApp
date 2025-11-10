@@ -87,25 +87,28 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
         return;
       }
 
-      // Determine role from existing links
-      const teacherLinks = await fetchTeacherStudentLinks('teacher');
-      const studentLinks = await fetchTeacherStudentLinks('student');
+      // Load latest links so UI stays in sync
+      const [teacherLinks, studentLinks] = await Promise.all([
+        fetchTeacherStudentLinks('teacher'),
+        fetchTeacherStudentLinks('student'),
+      ]);
+      set({ linkedStudents: teacherLinks, linkedTeachers: studentLinks });
 
-      const isTeacher = teacherLinks.some(
+      const hasTeacherLink = teacherLinks.some(
         link => link.studentId === partnerId && link.status === LinkStatus.ACTIVE
       );
-      const isStudent = studentLinks.some(
+      const hasStudentLink = studentLinks.some(
         link => link.teacherId === partnerId && link.status === LinkStatus.ACTIVE
       );
 
-      if (!isTeacher && !isStudent) {
+      if (!hasTeacherLink && !hasStudentLink) {
         console.error('[CollaborationStore] No active link found with partner');
         set({ sessionStatus: 'disconnected' });
         return;
       }
 
-      // Find the link
-      const link = isTeacher
+      // Determine canonical link + roles
+      const link = hasTeacherLink
         ? teacherLinks.find(l => l.studentId === partnerId && l.status === LinkStatus.ACTIVE)
         : studentLinks.find(l => l.teacherId === partnerId && l.status === LinkStatus.ACTIVE);
 
@@ -115,12 +118,39 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
         return;
       }
 
-      // Create new session
+      const teacherId = hasTeacherLink ? user.id : partnerId;
+      const studentId = hasTeacherLink ? partnerId : user.id;
+
+      // Check for an existing active session to join instead of duplicating
+      const existingSessions = await fetchCollaborationSessions(
+        hasTeacherLink ? 'teacher' : 'student',
+        SessionStatus.ACTIVE
+      );
+      const existingSession = existingSessions.find(
+        session =>
+          session.teacherId === teacherId &&
+          session.studentId === studentId &&
+          session.status === SessionStatus.ACTIVE
+      );
+
+      if (existingSession) {
+        set({
+          activeSession: existingSession,
+          sessionStatus: 'connected',
+          liveStrokes: [],
+          peerCursors: new Map(),
+          presence: new Map(),
+        });
+        console.log('[CollaborationStore] Joined existing session:', existingSession.id);
+        return;
+      }
+
+      // Create new session (no existing session found)
       const now = Date.now();
       const session: CollaborationSession = {
         id: genId(),
-        studentId: isTeacher ? partnerId : user.id,
-        teacherId: isTeacher ? user.id : partnerId,
+        studentId,
+        teacherId,
         linkId: link.id,
         attemptId: null,
         status: SessionStatus.ACTIVE,
@@ -133,10 +163,8 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
         updatedAt: now,
       };
 
-      // Save to cloud
       await upsertCollaborationSession(session);
 
-      // Update local state
       set({
         activeSession: session,
         sessionStatus: 'connected',
@@ -378,6 +406,9 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
     } catch (error) {
       console.error('[CollaborationStore] Failed to accept invite code:', error);
       captureException(error as Error, { code });
+    } finally {
+      // Refresh links so UI stays current regardless of success state above
+      get().loadLinks();
     }
   },
 
@@ -413,6 +444,31 @@ export const useCollaborationStore = create<CollaborationStoreState>((set, get) 
     } catch (error) {
       console.error('[CollaborationStore] Failed to revoke link:', error);
       captureException(error as Error, { linkId });
+    } finally {
+      get().loadLinks();
+    }
+  },
+
+  /**
+   * Refresh teacher/student link lists from Supabase
+   */
+  loadLinks: async () => {
+    if (!isCloudSyncEnabled()) {
+      set({ linkedStudents: [], linkedTeachers: [] });
+      return { teacherLinks: [], studentLinks: [] };
+    }
+
+    try {
+      const [teacherLinks, studentLinks] = await Promise.all([
+        fetchTeacherStudentLinks('teacher'),
+        fetchTeacherStudentLinks('student'),
+      ]);
+      set({ linkedStudents: teacherLinks, linkedTeachers: studentLinks });
+      return { teacherLinks, studentLinks };
+    } catch (error) {
+      console.error('[CollaborationStore] Failed to load links:', error);
+      captureException(error as Error);
+      return { teacherLinks: [], studentLinks: [] };
     }
   },
 }));

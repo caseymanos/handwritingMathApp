@@ -45,6 +45,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const linkedTeachers = useCollaborationStore(state => state.linkedTeachers);
   const linkedStudents = useCollaborationStore(state => state.linkedStudents);
   const revokeLink = useCollaborationStore(state => state.revokeLink);
+  const loadCollaborationLinks = useCollaborationStore(state => state.loadLinks);
 
   // Fetch user email when authed
   useEffect(() => {
@@ -71,24 +72,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   // Load collaboration links when authenticated
   useEffect(() => {
     if (isAuthed && cloudEnabled) {
-      const loadLinks = async () => {
-        try {
-          const { fetchTeacherStudentLinks } = await import('../utils/sync/collaborationSync');
-          const [teacherLinks, studentLinks] = await Promise.all([
-            fetchTeacherStudentLinks('teacher'),
-            fetchTeacherStudentLinks('student'),
-          ]);
-          useCollaborationStore.setState({
-            linkedTeachers: teacherLinks,
-            linkedStudents: studentLinks,
-          });
-        } catch (error) {
-          console.error('[SettingsScreen] Failed to load collaboration links:', error);
-        }
-      };
-      loadLinks();
+      loadCollaborationLinks().catch(error => {
+        console.error('[SettingsScreen] Failed to load collaboration links:', error);
+      });
     }
-  }, [isAuthed, cloudEnabled]);
+  }, [isAuthed, cloudEnabled, loadCollaborationLinks]);
 
   // Get device info
   const deviceInfo = {
