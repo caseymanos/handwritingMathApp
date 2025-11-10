@@ -77,10 +77,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
         <TouchableOpacity
           style={[styles.button, styles.secondaryButton]}
-          onPress={() => navigation.navigate('TutorialLibrary')}
+          onPress={() => navigation.navigate('TrainingMode', { problemId: 'le_easy_01' })}
         >
-          <Text style={styles.secondaryButtonText}>📚 Tutorial Library</Text>
-          <Text style={styles.buttonSubtext}>Watch video lessons and unlock problems</Text>
+          <Text style={styles.secondaryButtonText}>📚 Start Tutorial</Text>
+          <Text style={styles.buttonSubtext}>Learn with a simple equation (x + 5 = 12)</Text>
         </TouchableOpacity>
       </View>
 
