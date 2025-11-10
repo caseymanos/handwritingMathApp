@@ -64,6 +64,7 @@ export interface CollaborationSession {
   linkId: string; // References TeacherStudentLink
   attemptId: string | null; // Optional link to current attempt
   status: SessionStatus;
+  currentProblemId: string | null; // Currently active problem (synced between teacher/student)
   startedAt: number;
   endedAt: number | null;
   studentLastSeen: number; // For presence tracking
@@ -132,6 +133,16 @@ export interface RealtimeChannelState {
 }
 
 /**
+ * Problem change broadcast payload
+ */
+export interface ProblemChangePayload {
+  problemId: string;
+  changedBy: string; // User ID who changed the problem
+  timestamp: number;
+  shouldClearCanvas: boolean; // Always true for problem changes
+}
+
+/**
  * Collaboration store state (for collaborationStore.ts)
  */
 export interface CollaborationStoreState {
@@ -160,6 +171,8 @@ export interface CollaborationStoreState {
   endSession: () => Promise<void>;
   broadcastStroke: (stroke: Stroke) => Promise<void>;
   updateCursorPosition: (position: { x: number; y: number }) => void;
+  broadcastProblemChange: (problemId: string) => Promise<void>;
+  handleProblemChange: (payload: ProblemChangePayload) => void;
   generateInviteCode: () => Promise<string>;
   acceptInviteCode: (code: string) => Promise<void>;
   revokeLink: (linkId: string) => Promise<void>;
