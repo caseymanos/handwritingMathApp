@@ -98,6 +98,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
           <Text style={styles.tutorialButtonText}>📚 Advanced Tutorial</Text>
           <Text style={styles.tutorialDescription}>Variables both sides (3x + 7 = 2x + 15)</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.button, styles.secondaryButton]}
+          onPress={() => navigation.navigate('TutorialLibrary')}
+        >
+          <Text style={styles.secondaryButtonText}>View All Video Tutorials</Text>
+          <Text style={styles.buttonSubtext}>Browse complete tutorial library</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Additional Options */}
